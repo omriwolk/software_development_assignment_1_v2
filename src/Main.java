@@ -56,7 +56,8 @@ public class Main {
                 System.out.println("3) Mark done / not done");
                 System.out.println("4) Rename task");
                 System.out.println("5) View task by id");
-                System.out.println("6) Quit");
+                System.out.println("6) Delete task by id");
+                System.out.println("7) Quit");
                 System.out.print("Choose: ");
 
                 // Read user input as a string
@@ -154,8 +155,21 @@ public class Main {
 
                     }
 
-                    //Quit
+                    //View task by id
                     case 6 -> {
+                        //Read id
+                        int id = ReadId(scanner);
+
+                        // Delete the task
+                        repository.deleteTask(id);
+
+                        //Print statement
+                        System.out.println("Task " + id + " is Deleted");
+
+                    }
+
+                    //Quit
+                    case 7 -> {
                         //Stops the loop
                         System.out.println("So long, farewell, aufwiedersehn, goodbye");
                         running = false;

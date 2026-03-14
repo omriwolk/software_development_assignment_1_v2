@@ -105,6 +105,15 @@ public class TaskRepository implements AutoCloseable {
         }
     }
 
+    public void deleteTask(int id) throws SQLException {
+        String sql = "DELETE FROM tasks WHERE id = ?;";
+
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setInt(1, id);
+            stmt.executeUpdate();
+        }
+    }
+
     @Override
     public void close() throws SQLException {
         connection.close();
