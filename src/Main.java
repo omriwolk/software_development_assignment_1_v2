@@ -90,8 +90,10 @@ public class Main {
                         int id = repository.insertTask(title);
 
                         // Show confirmation with generated ID
-                        System.out.println("Task created with id=" + id);
+                        if (id != -1) {
 
+                            System.out.println("Task created with id=" + id);
+                        }
                     }
 
                     //List ALL tasks

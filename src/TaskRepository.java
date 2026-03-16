@@ -31,7 +31,7 @@ public class TaskRepository implements AutoCloseable {
         String sql = """
             CREATE TABLE IF NOT EXISTS tasks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,  -- unique task id
-                title TEXT NOT NULL,                   -- task title
+                title TEXT NOT NULL CHECK (trim(title) <> ''),                   -- task title
                 is_done INTEGER NOT NULL DEFAULT 0,    -- completion flag (0=false, 1=true)
                 created_at TEXT NOT NULL               -- creation timestamp
             );
@@ -47,6 +47,12 @@ public class TaskRepository implements AutoCloseable {
 
     // Inserts a new task into the database and returns the generated id
     public int insertTask(String title) throws SQLException {
+
+        // Handle empty titles
+        if (title == null || title.trim().isEmpty()) {
+            System.out.println("Title cannot be empty.");
+            return -1;
+        }
 
         // SQL query with placeholders (?) for values
         String sql = "INSERT INTO tasks(title, is_done, created_at) VALUES (?, ?, ?);";
