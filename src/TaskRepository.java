@@ -174,6 +174,41 @@ public class TaskRepository implements AutoCloseable {
         }
     }
 
+    // Searches tasks whose title contains the given keyword
+    public void searchTasks(String keyword) throws SQLException {
+
+        // SQL query using LIKE for partial matching
+        String sql = """
+        SELECT id, title, is_done, created_at
+        FROM tasks
+        WHERE title LIKE ?
+        ORDER BY id ASC;
+        """;
+
+        // Prepare statement
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+
+            // Add wildcards before and after keyword
+            statement.setString(1, "%" + keyword + "%");
+
+            // Execute query
+            try (ResultSet resultSet = statement.executeQuery()) {
+
+                // Iterate through results
+                while (resultSet.next()) {
+
+                    int id = resultSet.getInt("id");
+                    String title = resultSet.getString("title");
+                    Boolean isDone = resultSet.getInt("is_done") == 1;
+                    String createdAt = resultSet.getString("created_at");
+
+                    System.out.printf("[%d] %s | done=%s | created_at=%s%n", id, title, isDone, createdAt);
+
+                }
+            }
+        }
+    }
+
     // Renames a task
     public void renameTask(int id, String newTitle) throws SQLException {
 

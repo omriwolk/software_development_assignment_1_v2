@@ -58,8 +58,9 @@ public class Main {
                 System.out.println("5) Mark done / not done");
                 System.out.println("6) Rename task");
                 System.out.println("7) View task by id");
-                System.out.println("8) Delete task by id");
-                System.out.println("9) Quit");
+                System.out.println("8) Search task by keyword");
+                System.out.println("9) Delete task by id");
+                System.out.println("10) Quit");
                 System.out.print("Choose: ");
 
                 // Read user input as a string
@@ -167,8 +168,19 @@ public class Main {
 
                     }
 
-                    //View task by id
+                    //Search task by keyword
                     case 8 -> {
+                        //Read keyword
+                        System.out.print("Enter keyword: ");
+                        String keyword = scanner.nextLine();
+
+                        // Print the task
+                        repository.searchTasks(keyword);
+
+                    }
+
+                    //Delete task by id
+                    case 9 -> {
                         //Read id
                         int id = ReadId(scanner);
 
@@ -181,7 +193,7 @@ public class Main {
                     }
 
                     //Quit
-                    case 9 -> {
+                    case 10 -> {
                         //Stops the loop
                         System.out.println("So long, farewell, aufwiedersehn, goodbye");
                         running = false;
