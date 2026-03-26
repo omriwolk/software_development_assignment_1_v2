@@ -1,0 +1,232 @@
+// Imports the Scanner class so the program can read input from the user (keyboard).
+import java.util.Scanner;
+
+public class Main {
+
+    public static int ReadId(Scanner scanner) {
+
+        while(true) {
+
+            //Ask for id
+            System.out.println("Enter task id: ");
+            String raw_id = scanner.nextLine();
+
+            //Convert id to int
+            int id;
+            try {
+                id = Integer.parseInt(raw_id);
+                return id;
+            }
+
+            //If user typed text instead of number
+            catch (NumberFormatException e) {
+                System.out.println("Invalid input. Please enter a number.");
+            }
+        }
+    }
+
+    public static void main(String[] args) {
+
+        // "try-with-resources" block:
+        // - Creates a TaskRepository object to communicate with the database.
+        // - Creates a Scanner object to read user input from the keyboard.
+        // - Both will automatically close when the program exits the try block.
+
+        try (TaskRepository repository = new TaskRepository();
+             Scanner scanner = new Scanner(System.in)) {
+
+            //Calls the method that creates the tasks table in the database
+            repository.createTable();
+
+            // Prints a message to confirm the database is ready to use.
+            System.out.println("Database ready.");
+
+
+            // boolean flag that controls the CLI loop
+            boolean running = true;
+
+            //Main Loop
+            while (running == true) {
+
+                // Print the menu
+                System.out.println();
+                System.out.println("=== TASK LIST ===");
+                System.out.println("1) Add task");
+                System.out.println("2) List ALL tasks");
+                System.out.println("3) List DONE tasks");
+                System.out.println("4) List NOT DONE tasks");
+                System.out.println("5) Mark done / not done");
+                System.out.println("6) Rename task");
+                System.out.println("7) View task by id");
+                System.out.println("8) Search task by keyword");
+                System.out.println("9) Delete task by id");
+                System.out.println("10) Quit");
+                System.out.print("Choose: ");
+
+                // Read user input as a string
+                String input = scanner.nextLine();
+
+                //The choice variable will cast the input into int
+                int choice;
+                try {choice = Integer.parseInt(input);}
+
+                //If user typed text instead of number
+                catch (NumberFormatException e) { DO - add a check for numbers 1-10, exception if otherwise
+                    System.out.println("Invalid input. Please enter a number.");
+
+                    //restart loop and show menu again
+                    continue;
+                }
+
+                switch (choice){ DO - where possible, transfer code from case into TaskRepository
+
+                    //Add task
+                    case 1 -> {
+                        // Ask the user to type the task title, and read it from the user input
+                        System.out.print("Enter task title: ");
+                        String title = scanner.nextLine();
+
+                        //store in database
+                        int id = repository.insertTask(title);
+
+                        // Show confirmation with generated ID
+                        if (id != -1) {
+
+                            System.out.println("Task created with id=" + id);
+                        }
+                    }
+
+                    //List ALL tasks
+                    case 2 -> {
+                        repository.listTasks(null);
+                    }
+
+                    //List DONE tasks
+                    case 3 -> {
+                        repository.listTasks(true);
+                    }
+
+                    //List NOT DONE tasks
+                    case 4 -> {
+                        repository.listTasks(false);
+                    }
+
+                    //Mark done/ not done
+                    case 5 -> {
+                        //Read id
+                        int id = ReadId(scanner);
+
+                        //Done or not done flag
+                        System.out.println("Is the task done? true/false"); DO - rid of printed statement, just flip boolean
+                        String raw_done = scanner.nextLine();
+                        Boolean done;
+
+                        // Validate user input
+                        if (raw_done.equalsIgnoreCase("true") || raw_done.equalsIgnoreCase("false")) {
+                            done = Boolean.parseBoolean(raw_done);
+                        }
+
+                        else {
+                            //if not a boolean
+                            System.out.println("Invalid input. Please enter true or false.");
+                            // go back to menu
+                            continue;
+                        }
+
+                        //Update the task status
+
+                        boolean updated = repository.markDone(id, done);
+
+                        if (!updated) {
+                            System.out.println("No task found for id = " + id);
+                        }
+                        else if (done) {
+                            System.out.println("Task" + id + "is DONE");
+                        }
+                        else {
+                            System.out.println("Task" + id + "is NOT done");
+                        }
+                    }
+
+                    //Rename task
+                    case 6 -> {
+                        //Read id
+                        int id = ReadId(scanner);
+
+                        // Ask the user to type the task title, and read it from the user input
+                        System.out.print("Enter new task title: ");
+                        String new_title = scanner.nextLine();
+
+                        //Update task title
+                        boolean updated = repository.renameTask(id, new_title);
+
+                        if (updated) {
+                            System.out.println("Task" + id + "renamed to" + new_title);
+                        }
+                        else {
+                            System.out.println("No task found for id = " + id);
+                        }
+
+                    }
+
+                    //View task by id
+                    case 7 -> {
+                        //Read id
+                        int id = ReadId(scanner);
+
+                        // Print the task
+                        repository.printTaskById(id);
+
+                    }
+
+                    //Search task by keyword
+                    case 8 -> {
+                        //Read keyword
+                        System.out.print("Enter keyword: ");
+                        String keyword = scanner.nextLine();
+
+                        // Print the task
+                        repository.searchTasks(keyword);
+
+                    }
+
+                    //Delete task by id
+                    case 9 -> {
+                        //Read id
+                        int id = ReadId(scanner);
+
+                        // Delete the task
+                        repository.deleteTask(id);
+
+                        //Print statement
+                        System.out.println("Task " + id + " is Deleted");
+
+                    }
+
+                    //Quit
+                    case 10 -> {
+                        //Stops the loop
+                        System.out.println("So long, farewell, aufwiedersehn, goodbye");
+                        running = false;
+                    }
+
+                    // If user enters number outside menu range
+                    default -> { System.out.println("Invalid option. Please choose 1-9."); }
+
+                }
+
+            }
+
+        }
+
+        // Catches any unexpected errors in the program.
+        catch (Exception e) {
+
+            // Catches any unexpected errors in the program.
+            System.err.println("Application error: " + e.getMessage());
+
+            // Prints the full error details for debugging.
+            e.printStackTrace();
+        }
+    }
+}
