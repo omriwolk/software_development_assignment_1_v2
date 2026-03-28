@@ -1,96 +1,97 @@
-// SGC.java
-// Contains all domain classes: Student, Module, Assessment, DB helpers, and GradeClassifier
-// Fully annotated for line-by-line understanding
+// ==========================
+// File: SGC.java
+// Purpose: Defines all classes for Student, Module, Assessment,
+// database access, validation, and grade classification
+// ==========================
 
-import java.sql.*;          // JDBC classes for database connection & SQL
-import java.util.*;         // Collections: List, ArrayList
+import java.sql.*;        // For JDBC: Connection, PreparedStatement, ResultSet, SQLException
+import java.util.*;       // For List, ArrayList
 
 // ==========================
-// Abstract superclass for objects with IDs
+// Abstract superclass for any object with an ID
 // Demonstrates inheritance and encapsulation
 // ==========================
 abstract class IDObject {
-    protected int id; // Encapsulated ID field, accessible to subclasses
+    protected int id; // Encapsulated ID field
 
-    // Constructor assigns ID and validates it in DB
+    // Constructor: assigns ID and validates in DB
     public IDObject(int id) throws SQLException {
         this.id = id;
-        validateId(); // Abstract method implemented by subclasses
+        validateId(); // Throws exception if ID not in DB
     }
 
     // Getter for ID
     public int getId() { return id; }
 
-    // Abstract method to force subclasses to implement ID validation
+    // Abstract validation method; subclasses implement
     protected abstract void validateId() throws SQLException;
 }
 
 // ==========================
-// Assessment class
-// Each assessment belongs to a module and a student
+// Assessment class: represents an assessment for a student
 // ==========================
 class Assessment extends IDObject {
-    private String type;        // Assessment type: Exam, Report, etc.
-    private int moduleId;       // The module it belongs to
-    private double maxMarks;    // Maximum marks achievable
-    private Double awardedMarks;// Marks actually awarded (nullable)
-    private double weighting;   // Weight in module score calculation
-    private int studentId;      // The student this assessment belongs to
+    private String type;        // Assessment type (Exam, Report, Presentation)
+    private int moduleId;       // Module this assessment belongs to
+    private double maxMarks;    // Maximum marks
+    private Double awardedMarks;// Awarded marks (nullable)
+    private double weighting;   // Weight of this assessment in module
+    private int studentId;      // Student who took it
 
     // Constructor
     public Assessment(int assessmentId, int studentId) throws SQLException {
-        super(assessmentId);    // Validate ID exists in DB
+        super(assessmentId);    // Validate assessment ID
         this.studentId = studentId;
-        loadFromDB();           // Load all data from DB
+        loadFromDB();           // Load assessment details and weighting
     }
 
-    // Load assessment data from Assessment & AssessmentStructure tables
+    // Load assessment info from database
     private void loadFromDB() throws SQLException {
-        // Load assessment info
+        // Query Assessment table
         String query = "SELECT AssessmentType, ModuleID, MaximumMarks, AwardedMarks " +
                 "FROM Assessment WHERE AssessmentID = ? AND StudentID = ?";
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(query)) {
-            stmt.setInt(1, id);              // Set AssessmentID
-            stmt.setInt(2, studentId);       // Set StudentID
+            stmt.setInt(1, id);
+            stmt.setInt(2, studentId);
             ResultSet rs = stmt.executeQuery();
             if (rs.next()) {
                 type = rs.getString("AssessmentType");
                 moduleId = rs.getInt("ModuleID");
                 maxMarks = rs.getDouble("MaximumMarks");
-                // Awarded marks may be null if assessment not completed
                 awardedMarks = rs.getObject("AwardedMarks") != null
-                        ? rs.getDouble("AwardedMarks") : null;
+                        ? rs.getDouble("AwardedMarks")
+                        : null; // null means not attempted
             }
         }
 
-        // Load weighting from AssessmentStructure table
-        String weightQuery = "SELECT Weighting FROM AssessmentStructure WHERE AssessmentID = ? AND ModuleID = ?";
+        // Query AssessmentStructure table for weighting
+        String weightQuery = "SELECT Weighting FROM AssessmentStructure " +
+                "WHERE AssessmentID = ? AND ModuleID = ?";
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(weightQuery)) {
             stmt.setInt(1, id);
             stmt.setInt(2, moduleId);
             ResultSet rs = stmt.executeQuery();
             if (rs.next()) weighting = rs.getDouble("Weighting");
-            else weighting = 0; // default to 0 if no weighting found
+            else weighting = 0;
         }
     }
 
-    // Validate that Assessment ID exists
+    // Validate assessment exists
     @Override
     protected void validateId() throws SQLException {
-        if (!DBValidator.exists("Assessment", "AssessmentID", id)) {
+        if (!DBValidator.exists("Assessment", "AssessmentID", id))
             throw new IllegalArgumentException("Assessment ID " + id + " not found!");
-        }
     }
 
-    // Check if assessment has been completed
+    // Check if assessment is completed (awarded marks exist)
     public boolean isCompleted() { return awardedMarks != null; }
 
-    // Contribution to module score (weighted)
+    // Contribution of this assessment to module score
     public double getContributionToModuleScore() {
-        if (!isCompleted()) return 0; // missing assessment contributes 0
-        return (awardedMarks / maxMarks) * weighting;
+        if (!isCompleted()) return 0; // Missing assessment contributes 0
+        return (awardedMarks / maxMarks) * weighting; // Weighted score
     }
 
     // Getter for module ID
@@ -98,20 +99,20 @@ class Assessment extends IDObject {
 }
 
 // ==========================
-// Module class
+// Module class: represents a module
 // ==========================
 class Module extends IDObject {
-    private int level;                     // Module level: 4,5,6
-    private List<Assessment> assessments = new ArrayList<>(); // Assessments for this module
+    private int level;                    // Module level (4, 5, 6)
+    private List<Assessment> assessments = new ArrayList<>(); // Assessments in module
 
     // Constructor
     public Module(int moduleId, int studentId) throws SQLException {
-        super(moduleId);                   // Validate module ID
-        loadFromDB();                      // Load module info
-        loadAssessments(studentId);        // Load assessments for this student
+        super(moduleId);          // Validate module ID
+        loadFromDB();             // Load module details
+        loadAssessments(studentId);// Load student's assessments
     }
 
-    // Load module level from Module table
+    // Load module info
     private void loadFromDB() throws SQLException {
         String query = "SELECT Level FROM Module WHERE ModuleID = ?";
         try (Connection conn = DBConnection.getConnection();
@@ -122,7 +123,7 @@ class Module extends IDObject {
         }
     }
 
-    // Load assessments for this module and student
+    // Load all assessments for this student and module
     private void loadAssessments(int studentId) throws SQLException {
         String query = "SELECT AssessmentID FROM Assessment WHERE ModuleID = ? AND StudentID = ?";
         try (Connection conn = DBConnection.getConnection();
@@ -139,9 +140,8 @@ class Module extends IDObject {
     // Validate module ID
     @Override
     protected void validateId() throws SQLException {
-        if (!DBValidator.exists("Module", "ModuleID", id)) {
+        if (!DBValidator.exists("Module", "ModuleID", id))
             throw new IllegalArgumentException("Module ID " + id + " not found!");
-        }
     }
 
     // Getter for level
@@ -150,21 +150,23 @@ class Module extends IDObject {
     // Getter for assessments
     public List<Assessment> getAssessments() { return assessments; }
 
-    // Check if all assessments are completed
+    // Check if all assessments completed
     public boolean allAssessmentsCompleted() {
-        for (Assessment a : assessments) if (!a.isCompleted()) return false;
+        for (Assessment a : assessments) {
+            if (!a.isCompleted()) return false;
+        }
         return true;
     }
 
-    // Calculate module score by summing weighted contributions
+    // Calculate module score (sum of weighted assessments)
     public double calculateModuleScore() {
-        if (!allAssessmentsCompleted()) return 0; // fail if missing assessment
+        if (!allAssessmentsCompleted()) return 0; // Fail due to missing assessment
         double total = 0;
         for (Assessment a : assessments) total += a.getContributionToModuleScore();
         return total;
     }
 
-    // Get module grade string
+    // Module grade as string
     public String getModuleGrade() {
         if (!allAssessmentsCompleted()) return "Fail (missing assessment)";
         return GradeClassifier.classify(calculateModuleScore());
@@ -175,37 +177,38 @@ class Module extends IDObject {
 // Student class
 // ==========================
 class Student extends IDObject {
-    private List<Module> modules = new ArrayList<>();
+    private List<Module> modules = new ArrayList<>(); // Enrolled modules
 
     // Constructor
     public Student(int studentId) throws SQLException {
-        super(studentId); // Validate student ID
-        loadModules();    // Load enrolled modules
+        super(studentId); // Validate ID
+        loadModules();    // Load student's modules
     }
 
-    // Load student's modules from StudentEnrolment table
+    // Load modules the student is enrolled in
     private void loadModules() throws SQLException {
         String query = "SELECT ModuleID FROM StudentEnrolment WHERE StudentID = ?";
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(query)) {
             stmt.setInt(1, id);
             ResultSet rs = stmt.executeQuery();
-            while (rs.next()) modules.add(new Module(rs.getInt("ModuleID"), id));
+            while (rs.next()) {
+                modules.add(new Module(rs.getInt("ModuleID"), id));
+            }
         }
     }
 
-    // Validate student ID exists
+    // Validate student ID
     @Override
     protected void validateId() throws SQLException {
-        if (!DBValidator.exists("StudentEnrolment", "StudentID", id)) {
+        if (!DBValidator.exists("StudentEnrolment", "StudentID", id))
             throw new IllegalArgumentException("Student ID " + id + " not found!");
-        }
     }
 
     // Getter for modules
     public List<Module> getModules() { return modules; }
 
-    // Calculate degree score (Level 5 = 30%, Level 6 = 70%)
+    // Calculate degree score (level 5 = 30%, level 6 = 70%)
     public double calculateDegreeScore() {
         double total = 0;
         double weightSum = 0;
@@ -214,11 +217,11 @@ class Student extends IDObject {
             if (m.getLevel() == 5) { total += m.calculateModuleScore() * 0.3; weightSum += 0.3; }
             else if (m.getLevel() == 6) { total += m.calculateModuleScore() * 0.7; weightSum += 0.7; }
         }
-        if (weightSum == 0) return 0; // no level 5/6 modules completed
+        if (weightSum == 0) return 0;
         return total / weightSum;
     }
 
-    // Get degree grade string
+    // Degree grade
     public String getDegreeGrade() {
         return GradeClassifier.classify(calculateDegreeScore());
     }
@@ -228,6 +231,7 @@ class Student extends IDObject {
 // Grade classification helper
 // ==========================
 class GradeClassifier {
+    // Converts numeric score to grade string
     public static String classify(double score) {
         if (score < 40) return "Fail";
         else if (score < 50) return "Third Class";
@@ -241,25 +245,27 @@ class GradeClassifier {
 // Database connection helper
 // ==========================
 class DBConnection {
+    // SQLite DB URL pointing to your actual database
     private static final String URL = "jdbc:sqlite:/home/omri/software_development/assignment-1/university.db";
 
-    // Get a connection to SQLite DB
+    // Returns a new connection
     public static Connection getConnection() throws SQLException {
         return DriverManager.getConnection(URL);
     }
 }
 
 // ==========================
-// Database validator helper
+// Database validation helper
 // ==========================
 class DBValidator {
+    // Checks if a given ID exists in a table column
     public static boolean exists(String table, String column, int id) throws SQLException {
         String query = "SELECT 1 FROM " + table + " WHERE " + column + " = ?";
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(query)) {
             stmt.setInt(1, id);
             ResultSet rs = stmt.executeQuery();
-            return rs.next();
+            return rs.next(); // true if exists
         }
     }
 }
