@@ -1,0 +1,49 @@
+// Main.java
+// Run the transcript report for all students with full line-by-line annotations
+
+import java.sql.*;
+import java.util.*;
+
+public class Main {
+    public static void main(String[] args) {
+        try (Connection conn = DBConnection.getConnection()) { // open DB connection
+
+            // 1. Get all student IDs from StudentEnrolment
+            List<Integer> studentIds = new ArrayList<>();
+            String studentQuery = "SELECT DISTINCT StudentID FROM StudentEnrolment";
+            try (PreparedStatement stmt = conn.prepareStatement(studentQuery)) {
+                ResultSet rs = stmt.executeQuery();
+                while (rs.next()) studentIds.add(rs.getInt("StudentID")); // collect IDs
+            }
+
+            // 2. Print table header
+            System.out.printf("%-10s %-8s %-6s %-12s %-25s%n",
+                    "StudentID", "ModuleID", "Level", "Score", "Module Grade");
+            System.out.println("================================================================");
+
+            // 3. Loop through each student
+            for (int sid : studentIds) {
+                Student student = new Student(sid); // load student and modules
+
+                // 4. Loop through each module
+                for (Module m : student.getModules()) {
+                    System.out.printf("%-10d %-8d %-6d %-12.2f %-25s%n",
+                            sid,                    // Student ID
+                            m.getId(),              // Module ID
+                            m.getLevel(),           // Module level
+                            m.calculateModuleScore(), // Module numeric score
+                            m.getModuleGrade());     // Module grade string
+                }
+
+                // 5. Print degree summary per student
+                System.out.printf("%-10d %-8s %-6s %-12.2f %-25s%n",
+                        sid, "-", "-", student.calculateDegreeScore(),
+                        "Degree Grade: " + student.getDegreeGrade());
+                System.out.println("================================================================");
+            }
+
+        } catch (SQLException e) {
+            e.printStackTrace(); // Print SQL errors if any
+        }
+    }
+}
