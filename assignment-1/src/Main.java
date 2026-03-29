@@ -64,7 +64,7 @@ public class Main {
                     Integer filterAssessmentID = null; // Optional assessment filter
 
                     if (typeInput.equals("1")) { // Assessment
-                        System.out.print("Enter AssessmentID: "); // Corrected name
+                        System.out.print("Enter AssessmentID: ");
                         String aidInput = scanner.nextLine().trim();
                         try {
                             filterAssessmentID = Integer.parseInt(aidInput);
@@ -91,14 +91,7 @@ public class Main {
                     }
 
                     // ==========================
-                    // 3️⃣ Print table header
-                    // ==========================
-                    System.out.printf("%-10s %-10s %-8s %-12s %-12s %-35s%n",
-                            "StudentID", "ModuleID", "Level", "AssessID", "Score", "Grade");
-                    System.out.println("================================================================================");
-
-                    // ==========================
-                    // 4️⃣ Process each student
+                    // 3️⃣ Process each student
                     // ==========================
                     for (Student student : students) {
                         List<Module> modules = student.getModules(); // Get all modules
@@ -140,8 +133,11 @@ public class Main {
                         }
 
                         // ==========================
-                        // 5️⃣ Loop modules and assessments
+                        // 4️⃣ Prepare rows for tables
                         // ==========================
+                        List<String> assessmentRows = new ArrayList<>();
+                        List<String> moduleSummaryRows = new ArrayList<>();
+
                         for (Module m : filteredModules) {
                             List<Assessment> assessments = m.getAssessments();
 
@@ -153,42 +149,69 @@ public class Main {
                                         .collect(Collectors.toList());
                             }
 
-                            // Print assessment rows
+                            // --------- Collect assessment rows ---------
                             for (Assessment a : assessments) {
                                 double score = a.isCompleted() ? a.getContributionToModuleScore() : 0.0;
                                 String grade = a.isCompleted() ? GradeClassifier.classify(score)
                                         : ConsoleColors.RED + "Fail - You shall NOT PASS!" + ConsoleColors.RESET;
 
-                                System.out.printf("%-10d %-10d %-8d %-12d %-12.2f %-35s%n",
+                                assessmentRows.add(String.format("%-10d %-10d %-8d %-12d %-12.2f %-35s",
                                         student.getId(),
                                         m.getId(),
                                         m.getLevel(),
                                         a.getId(),
                                         score,
-                                        grade
-                                );
+                                        grade));
                             }
 
-                            // If degree report, print module summary
+                            // --------- Collect module summary row if degree report ---------
                             if (degreeReport) {
-                                System.out.printf("%-10d %-10d %-8d %-12s %-12.2f %-35s%n",
+                                double moduleScore = m.calculateModuleScore();
+                                String moduleGrade = m.getModuleGrade();
+                                moduleSummaryRows.add(String.format("%-10d %-10d %-8d %-12.2f %-35s",
                                         student.getId(),
                                         m.getId(),
                                         m.getLevel(),
-                                        "-",
-                                        m.calculateModuleScore(),
-                                        m.getModuleGrade());
+                                        moduleScore,
+                                        moduleGrade));
                             }
                         }
 
-                        // Print overall degree if requested
-                        if (degreeReport) {
-                            System.out.printf("%-10d %-10s %-8s %-12s %-12.2f %-35s%n",
-                                    student.getId(),
-                                    "-", "-", "-",
-                                    student.calculateDegreeScore(),
-                                    "Degree Grade: " + student.getDegreeGrade());
+                        // ==========================
+                        // 5️⃣ Print Assessment Table
+                        // ==========================
+                        if (!assessmentRows.isEmpty()) {
+                            System.out.println("ASSESSMENT REPORT");
+                            System.out.printf("%-10s %-10s %-8s %-12s %-12s %-35s%n",
+                                    "StudentID", "ModuleID", "Level", "AssessID", "Score", "Grade");
                             System.out.println("================================================================================");
+                            assessmentRows.forEach(System.out::println);
+                            System.out.println(); // Blank line for spacing
+                        }
+
+                        // ==========================
+                        // 6️⃣ Print Module Summary Table
+                        // ==========================
+                        if (!moduleSummaryRows.isEmpty()) {
+                            System.out.println("MODULE SUMMARY REPORT");
+                            System.out.printf("%-10s %-10s %-8s %-12s %-35s%n",
+                                    "StudentID", "ModuleID", "Level", "Score", "Grade"); // Removed Label
+                            System.out.println("===============================================================");
+                            moduleSummaryRows.forEach(System.out::println);
+                            System.out.println(); // Blank line for spacing
+                        }
+
+                        // ==========================
+                        // 7️⃣ Print Overall Degree Table
+                        // ==========================
+                        if (degreeReport) {
+                            double degreeScore = student.calculateDegreeScore();
+                            String degreeGrade = student.getDegreeGrade();
+                            System.out.println("DEGREE SUMMARY REPORT");
+                            System.out.printf("%-10s %-12s %-35s%n", "StudentID", "Score", "Degree Grade");
+                            System.out.println("===============================================================");
+                            System.out.printf("%-10d %-12.2f %-35s%n", student.getId(), degreeScore, degreeGrade);
+                            System.out.println("===============================================================\n");
                         }
 
                     } // End student loop
