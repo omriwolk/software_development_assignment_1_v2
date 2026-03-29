@@ -1,231 +1,293 @@
-import java.sql.*;                  // JDBC classes: Connection, PreparedStatement, ResultSet, SQLException
-import java.util.*;                 // List, ArrayList, Scanner
-import java.util.stream.Collectors; // For stream filtering
+// ==========================
+// File: Main.java
+// ==========================
+import java.util.*;
+import java.sql.*;
+import java.io.*;
+import java.nio.file.*;
+import java.util.stream.*;
 
+// ==========================
+// Main CLI class
+// ==========================
 public class Main {
 
-    public static void main(String[] args) {
+    private static final Scanner scanner = new Scanner(System.in); // Scanner for CLI input
+    private static final int PAGE_SIZE = 10;                        // Pagination size
 
-        try (Scanner scanner = new Scanner(System.in)) { // Scanner to read console input
+    public static void main(String[] args) throws SQLException {
+        System.out.println("=== Welcome to SGC CLI ===");
 
-            while (true) { // Main program loop
+        while (true) {
+            System.out.print("\nEnter student ID (or 'exit'): ");
+            String input = scanner.nextLine().trim();
 
-                // ==========================
-                // 1️⃣ Prompt user for student ID
-                // ==========================
-                System.out.print("Enter student ID or 'all' for all students (or 'exit' to quit): ");
-                String studentInput = scanner.nextLine().trim(); // Read input
-                if (studentInput.equalsIgnoreCase("exit")) break; // Exit program
+            if (input.equalsIgnoreCase("exit")) break;
 
-                List<Student> students = new ArrayList<>(); // List of students to process
+            int studentId;
+            try {
+                studentId = Integer.parseInt(input);
+            } catch (NumberFormatException e) {
+                System.out.println("Invalid student ID.");
+                continue;
+            }
 
-                try (Connection conn = DBConnection.getConnection()) { // Open DB connection
+            Student student;
+            try {
+                student = new Student(studentId); // Load student & modules
+            } catch (IllegalArgumentException e) {
+                System.out.println("Student not found.");
+                continue;
+            }
 
-                    // If 'all' students requested
-                    if (studentInput.equalsIgnoreCase("all")) {
-                        String studentQuery = "SELECT DISTINCT StudentID FROM StudentEnrolment"; // SQL
-                        try (PreparedStatement stmt = conn.prepareStatement(studentQuery);
-                             ResultSet rs = stmt.executeQuery()) {
-                            while (rs.next()) {
-                                students.add(new Student(rs.getInt("StudentID"))); // Load student objects
-                            }
-                        }
-                        if (students.isEmpty()) { // Check DB empty
-                            System.out.println(ConsoleColors.RED + "No students found in the database." + ConsoleColors.RESET);
-                            continue; // Back to main prompt
-                        }
-
-                    } else { // Specific student ID
-                        try {
-                            int sid = Integer.parseInt(studentInput); // Parse ID
-                            if (!DBValidator.exists("StudentEnrolment", "StudentID", sid)) { // Check existence
-                                System.out.println(ConsoleColors.RED + "Student ID " + sid + " does not exist." + ConsoleColors.RESET);
-                                continue;
-                            }
-                            students.add(new Student(sid));
-                        } catch (NumberFormatException e) { // Invalid format
-                            System.out.println(ConsoleColors.RED + "Invalid student ID format." + ConsoleColors.RESET);
-                            continue;
-                        }
-                    }
-
-                    // ==========================
-                    // 2️⃣ Prompt for report type
-                    // ==========================
-                    System.out.println("Select report type:");
-                    System.out.println("1) Assessment");
-                    System.out.println("2) Module");
-                    System.out.println("3) Degree");
-                    System.out.print("Enter 1, 2, or 3: ");
-                    String typeInput = scanner.nextLine().trim();
-
-                    boolean degreeReport = false;   // Flag for full degree report
-                    Integer filterModuleID = null;  // Optional module filter
-                    Integer filterAssessmentID = null; // Optional assessment filter
-
-                    if (typeInput.equals("1")) { // Assessment
-                        System.out.print("Enter AssessmentID: ");
-                        String aidInput = scanner.nextLine().trim();
-                        try {
-                            filterAssessmentID = Integer.parseInt(aidInput);
-                        } catch (NumberFormatException e) {
-                            System.out.println(ConsoleColors.RED + "Invalid AssessmentID format." + ConsoleColors.RESET);
-                            continue;
-                        }
-
-                    } else if (typeInput.equals("2")) { // Module
-                        System.out.print("Enter ModuleID: ");
-                        String midInput = scanner.nextLine().trim();
-                        try {
-                            filterModuleID = Integer.parseInt(midInput);
-                        } catch (NumberFormatException e) {
-                            System.out.println(ConsoleColors.RED + "Invalid ModuleID format." + ConsoleColors.RESET);
-                            continue;
-                        }
-
-                    } else if (typeInput.equals("3")) { // Degree
-                        degreeReport = true; // No extra input
-                    } else { // Invalid selection
-                        System.out.println(ConsoleColors.RED + "Invalid selection. Enter 1, 2, or 3." + ConsoleColors.RESET);
-                        continue;
-                    }
-
-                    // ==========================
-                    // 3️⃣ Process each student
-                    // ==========================
-                    for (Student student : students) {
-                        List<Module> modules = student.getModules(); // Get all modules
-                        List<Module> filteredModules = modules;      // Start with all modules
-
-                        // Apply module filter if needed
-                        if (filterModuleID != null) {
-                            final Integer moduleFilter = filterModuleID; // final for lambda
-                            filteredModules = modules.stream()
-                                    .filter(m -> m.getId() == moduleFilter)
-                                    .collect(Collectors.toList());
-                            if (filteredModules.isEmpty()) {
-                                System.out.println(ConsoleColors.RED + "Module ID " + filterModuleID +
-                                        " not found for student " + student.getId() + ConsoleColors.RESET);
-                                continue; // skip this student
-                            }
-                        }
-
-                        // If filtering by assessment
-                        if (filterAssessmentID != null) {
-                            final Integer assessmentFilter = filterAssessmentID;
-
-                            // Check if assessment exists anywhere for this student
-                            boolean assessmentExists = modules.stream()
-                                    .flatMap(m -> m.getAssessments().stream())
-                                    .anyMatch(a -> a.getId() == assessmentFilter);
-
-                            if (!assessmentExists) { // Not found anywhere
-                                System.out.println(ConsoleColors.RED + "Assessment ID " + filterAssessmentID +
-                                        " not found for student " + student.getId() + ConsoleColors.RESET);
-                                continue; // skip this student
-                            }
-
-                            // Filter modules to only those that contain the assessment
-                            filteredModules = filteredModules.stream()
-                                    .filter(m -> m.getAssessments().stream()
-                                            .anyMatch(a -> a.getId() == assessmentFilter))
-                                    .collect(Collectors.toList());
-                        }
-
-                        // ==========================
-                        // 4️⃣ Prepare rows for tables
-                        // ==========================
-                        List<String> assessmentRows = new ArrayList<>();
-                        List<String> moduleSummaryRows = new ArrayList<>();
-
-                        for (Module m : filteredModules) {
-                            List<Assessment> assessments = m.getAssessments();
-
-                            // Filter assessments if needed
-                            if (filterAssessmentID != null) {
-                                final Integer assessmentFilter = filterAssessmentID;
-                                assessments = assessments.stream()
-                                        .filter(a -> a.getId() == assessmentFilter)
-                                        .collect(Collectors.toList());
-                            }
-
-                            // --------- Collect assessment rows ---------
-                            for (Assessment a : assessments) {
-                                double score = a.isCompleted() ? a.getContributionToModuleScore() : 0.0;
-                                String grade = a.isCompleted() ? GradeClassifier.classify(score)
-                                        : ConsoleColors.RED + "Fail - You shall NOT PASS!" + ConsoleColors.RESET;
-
-                                assessmentRows.add(String.format("%-10d %-10d %-8d %-12d %-12.2f %-35s",
-                                        student.getId(),
-                                        m.getId(),
-                                        m.getLevel(),
-                                        a.getId(),
-                                        score,
-                                        grade));
-                            }
-
-                            // --------- Collect module summary row if degree report ---------
-                            if (degreeReport) {
-                                double moduleScore = m.calculateModuleScore();
-                                String moduleGrade = m.getModuleGrade();
-                                moduleSummaryRows.add(String.format("%-10d %-10d %-8d %-12.2f %-35s",
-                                        student.getId(),
-                                        m.getId(),
-                                        m.getLevel(),
-                                        moduleScore,
-                                        moduleGrade));
-                            }
-                        }
-
-                        // ==========================
-                        // 5️⃣ Print Assessment Table
-                        // ==========================
-                        if (!assessmentRows.isEmpty()) {
-                            System.out.println("ASSESSMENT REPORT");
-                            System.out.printf("%-10s %-10s %-8s %-12s %-12s %-35s%n",
-                                    "StudentID", "ModuleID", "Level", "AssessID", "Score", "Grade");
-                            System.out.println("================================================================================");
-                            assessmentRows.forEach(System.out::println);
-                            System.out.println(); // Blank line for spacing
-                        }
-
-                        // ==========================
-                        // 6️⃣ Print Module Summary Table
-                        // ==========================
-                        if (!moduleSummaryRows.isEmpty()) {
-                            System.out.println("MODULE SUMMARY REPORT");
-                            System.out.printf("%-10s %-10s %-8s %-12s %-35s%n",
-                                    "StudentID", "ModuleID", "Level", "Score", "Grade"); // Removed Label
-                            System.out.println("===============================================================");
-                            moduleSummaryRows.forEach(System.out::println);
-                            System.out.println(); // Blank line for spacing
-                        }
-
-                        // ==========================
-                        // 7️⃣ Print Overall Degree Table
-                        // ==========================
-                        if (degreeReport) {
-                            double degreeScore = student.calculateDegreeScore();
-                            String degreeGrade = student.getDegreeGrade();
-                            System.out.println("DEGREE SUMMARY REPORT");
-                            System.out.printf("%-10s %-12s %-35s%n", "StudentID", "Score", "Degree Grade");
-                            System.out.println("===============================================================");
-                            System.out.printf("%-10d %-12.2f %-35s%n", student.getId(), degreeScore, degreeGrade);
-                            System.out.println("===============================================================\n");
-                        }
-
-                    } // End student loop
-
-                } catch (SQLException e) { // Catch DB errors
-                    e.printStackTrace();
-                }
-
-            } // End main while loop
-
-        } catch (Exception e) { // Catch-all
-            e.printStackTrace();
+            studentMenu(student); // Enter main student menu
         }
+        System.out.println("Goodbye!");
+    }
 
-    } // End main
+    // ==========================
+    // Student main menu
+    // ==========================
+    private static void studentMenu(Student student) throws SQLException {
+        while (true) {
+            System.out.println("\n--- Main Menu ---");
+            System.out.println("1) Assessment Report");
+            System.out.println("2) Module Report");
+            System.out.println("3) Degree Report");
+            System.out.println("0) Back");
+            System.out.print("Select option: ");
+            String choice = scanner.nextLine();
 
-} // End class Main
+            switch (choice) {
+                case "1": assessmentMenu(student); break;
+                case "2": moduleMenu(student); break;
+                case "3": degreeMenu(student); break;
+                case "0": return; // Back to previous menu
+                default: System.out.println("Invalid choice.");
+            }
+        }
+    }
+
+    // ==========================
+    // Assessment menu
+    // ==========================
+    private static void assessmentMenu(Student student) throws SQLException {
+        while (true) {
+            System.out.println("\n--- Assessment Report ---");
+            System.out.println("0) Back");
+            System.out.print("Enter Assessment ID: ");
+            String input = scanner.nextLine().trim();
+
+            if (input.equals("0")) return; // Back
+
+            int assessmentId;
+            try {
+                assessmentId = Integer.parseInt(input);
+            } catch (NumberFormatException e) {
+                System.out.println("Invalid assessment ID.");
+                continue;
+            }
+
+            Assessment assessment = null;
+            for (Module m : student.getModules()) {
+                for (Assessment a : m.getAssessments()) {
+                    if (a.getId() == assessmentId) {
+                        assessment = a;
+                        break;
+                    }
+                }
+            }
+
+            if (assessment == null) {
+                System.out.println("Assessment not found.");
+                continue;
+            }
+
+            printAssessmentTable(List.of(assessment)); // Single-assessment table
+            exportAssessmentsCSV(student.getId(), List.of(assessment)); // Optionally export CSV
+        }
+    }
+
+    // ==========================
+    // Module menu
+    // ==========================
+    private static void moduleMenu(Student student) throws SQLException {
+        while (true) {
+            System.out.println("\n--- Module Report ---");
+            System.out.println("0) Back");
+            System.out.println("Available Modules:");
+            for (Module m : student.getModules()) {
+                System.out.printf("%d) Module %d%n", m.getId(), m.getId());
+            }
+            System.out.print("Enter Module ID (or 0 for all modules): ");
+            String input = scanner.nextLine().trim();
+
+            int moduleId;
+            try {
+                moduleId = Integer.parseInt(input);
+            } catch (NumberFormatException e) {
+                System.out.println("Invalid input.");
+                continue;
+            }
+
+            List<Module> selectedModules;
+            if (moduleId == 0) selectedModules = student.getModules();
+            else {
+                Module m = student.getModuleById(moduleId);
+                if (m == null) {
+                    System.out.println("Module not found.");
+                    continue;
+                }
+                selectedModules = List.of(m);
+            }
+
+            // Prompt for numeric grade filter
+            System.out.println("Enter minimum score to include (0 = no filter): ");
+            double minScore;
+            try {
+                minScore = Double.parseDouble(scanner.nextLine().trim());
+            } catch (NumberFormatException e) {
+                minScore = 0;
+            }
+
+            // Prompt for sorting
+            System.out.println("Sort modules by: 1) Highest 2) Lowest 3) Level");
+            String sortChoice = scanner.nextLine().trim();
+            selectedModules = sortModules(selectedModules, sortChoice);
+
+            // Collect all assessments from modules, filter by numeric score
+            List<Assessment> filteredAssessments = new ArrayList<>();
+            double topScore = 0;
+            for (Module m : selectedModules) {
+                for (Assessment a : m.getAssessments()) {
+                    if (a.isCompleted() && a.getContributionToModuleScore() >= minScore) {
+                        filteredAssessments.add(a);
+                        if (a.getContributionToModuleScore() > topScore) topScore = a.getContributionToModuleScore();
+                    }
+                }
+            }
+
+            if (filteredAssessments.isEmpty()) {
+                System.out.println("No matching assessments.");
+                continue;
+            }
+
+            // Print table with top-module highlight
+            paginateAssessments(filteredAssessments, topScore);
+
+            // Export CSV
+            exportAssessmentsCSV(student.getId(), filteredAssessments);
+        }
+    }
+
+    // ==========================
+    // Degree menu
+    // ==========================
+    private static void degreeMenu(Student student) throws SQLException {
+        System.out.println("\n--- Degree Report ---");
+        double degreeScore = student.calculateDegreeScore();
+        String grade = student.getDegreeGrade();
+        System.out.printf("Student %d: %.2f - %s%n", student.getId(), degreeScore, grade);
+
+        // Export degree report CSV
+        exportDegreeCSV(student.getId(), student);
+    }
+
+    // ==========================
+    // Helper: print single/multi-assessment table
+    // ==========================
+    private static void printAssessmentTable(List<Assessment> assessments) {
+        paginateAssessments(assessments, null); // Use pagination logic
+    }
+
+    // ==========================
+    // Pagination and printing
+    // ==========================
+    private static void paginateAssessments(List<Assessment> assessments, Double topScore) {
+        int totalPages = (assessments.size() + PAGE_SIZE - 1) / PAGE_SIZE;
+        for (int page = 0; page < totalPages; page++) {
+            int start = page * PAGE_SIZE;
+            int end = Math.min(start + PAGE_SIZE, assessments.size());
+            List<Assessment> sub = assessments.subList(start, end);
+
+            // Header
+            System.out.printf("%-10s %-8s %-6s %-9s %-10s %-35s%n",
+                    "StudentID","ModuleID","Level","AssessID","Score","Grade");
+            System.out.println("================================================================================");
+
+            for (Assessment a : sub) {
+                String grade = a.isCompleted() ? GradeClassifier.classify(a.getContributionToModuleScore())
+                        : ConsoleColors.RED + "Not Completed" + ConsoleColors.RESET;
+                if (topScore != null && a.getContributionToModuleScore() == topScore)
+                    grade += " <-- Top Module";
+                System.out.printf("%-10d %-8d %-6d %-9d %-10.2f %-35s%n",
+                        a.studentId, a.getModuleId(), getModuleLevel(a), a.getId(),
+                        a.isCompleted() ? a.getContributionToModuleScore() : 0, grade);
+            }
+
+            if (page < totalPages - 1) {
+                System.out.print("Press Enter to continue...");
+                scanner.nextLine();
+            }
+        }
+    }
+
+    // ==========================
+    // Helper: get module level for an assessment
+    // ==========================
+    private static int getModuleLevel(Assessment a) {
+        try {
+            Module m = new Module(a.getModuleId(), a.studentId);
+            return m.getLevel();
+        } catch (SQLException e) { return 0; }
+    }
+
+    // ==========================
+    // Sorting helper
+    // ==========================
+    private static List<Module> sortModules(List<Module> modules, String choice) {
+        switch (choice) {
+            case "1": // Highest
+                modules.sort((a,b) -> Double.compare(b.calculateModuleScore(), a.calculateModuleScore()));
+                break;
+            case "2": // Lowest
+                modules.sort(Comparator.comparingDouble(Module::calculateModuleScore));
+                break;
+            case "3": // By level
+                modules.sort(Comparator.comparingInt(Module::getLevel));
+                break;
+        }
+        return modules;
+    }
+
+    // ==========================
+    // CSV export for assessments
+    // ==========================
+    private static void exportAssessmentsCSV(int studentId, List<Assessment> assessments) {
+        String filename = "Student_" + studentId + "_assessments.csv";
+        try (PrintWriter pw = new PrintWriter(Files.newBufferedWriter(Paths.get(filename)))) {
+            pw.println("StudentID,ModuleID,Level,AssessmentID,Score,Grade");
+            for (Assessment a : assessments) {
+                String grade = a.isCompleted() ? GradeClassifier.classify(a.getContributionToModuleScore()) : "Not Completed";
+                pw.printf("%d,%d,%d,%d,%.2f,%s%n",
+                        a.studentId, a.getModuleId(), getModuleLevel(a), a.getId(),
+                        a.isCompleted() ? a.getContributionToModuleScore() : 0, grade);
+            }
+            System.out.println("Exported to " + filename);
+        } catch (IOException e) { System.out.println("Failed to export CSV."); }
+    }
+
+    // ==========================
+    // CSV export for degree
+    // ==========================
+    private static void exportDegreeCSV(int studentId, Student student) {
+        String filename = "Student_" + studentId + "_degree.csv";
+        try (PrintWriter pw = new PrintWriter(Files.newBufferedWriter(Paths.get(filename)))) {
+            double score = student.calculateDegreeScore();
+            String grade = student.getDegreeGrade();
+            pw.println("StudentID,DegreeScore,DegreeGrade");
+            pw.printf("%d,%.2f,%s%n", studentId, score, grade);
+            System.out.println("Exported degree report to " + filename);
+        } catch (IOException e) { System.out.println("Failed to export CSV."); }
+    }
+}
