@@ -1,233 +1,191 @@
-import java.util.*; // ArrayList, List, Comparator
-import java.io.*;   // For CSV export
+import java.sql.*;
+import java.util.*;
 
-// Single class to handle all student, module, assessment data and reporting
+// Main SGC class containing all entities
 public class SGC {
 
-    private static int globalAssessmentID = 1; // Global counter for unique assessment IDs
+    private static final String DB_PATH = "/home/omri/software_development/assignment-1/university.db";
 
-    // === STUDENT CLASS ===
-    public static class Student {
-        private int id; // Student ID
-        private List<Module> modules; // Modules enrolled
+    /** Superclass for objects with an ID */
+    public static abstract class IDObject {
+        protected int id;
 
-        public Student(int id) {
-            this.id = id;
-            this.modules = new ArrayList<>();
-            loadDummyModules(); // For testing, populate modules
-        }
+        public IDObject(int id) { this.id = id; }
 
         public int getId() { return id; }
+
+        protected void validateId(String tableName, String idColumn) throws SQLException {
+            try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + DB_PATH);
+                 PreparedStatement ps = conn.prepareStatement(
+                         "SELECT COUNT(*) FROM " + tableName + " WHERE " + idColumn + " = ?")) {
+                ps.setInt(1, id);
+                ResultSet rs = ps.executeQuery();
+                if (!rs.next() || rs.getInt(1) == 0) {
+                    throw new SQLException("ID " + id + " not found in table " + tableName);
+                }
+            }
+        }
+    }
+
+    /** Assessment class */
+    public static class Assessment extends IDObject {
+        private String type;
+        private int moduleId;
+        private Double maxMarks;
+        private Double awardedMarks;
+        private double weighting;
+
+        public Assessment(int id, String type, int moduleId, Double maxMarks, Double awardedMarks, double weighting) {
+            super(id);
+            this.type = type;
+            this.moduleId = moduleId;
+            this.maxMarks = maxMarks;
+            this.awardedMarks = awardedMarks;
+            this.weighting = weighting;
+        }
+
+        public String getType() { return type; }
+        public int getModuleId() { return moduleId; }
+        public Double getMaxMarks() { return maxMarks; }
+        public Double getAwardedMarks() { return awardedMarks; }
+        public double getWeighting() { return weighting; }
+
+        // Calculate grade according to type
+        public double getGrade() {
+            if (awardedMarks == null) return 0.0;
+            if (type.equalsIgnoreCase("Exam") && maxMarks != null && maxMarks != 0)
+                return (awardedMarks / maxMarks) * 100.0;
+            return awardedMarks;
+        }
+
+        public boolean isIncomplete() { return awardedMarks == null; }
+    }
+
+    /** Module class */
+    public static class Module extends IDObject {
+        private int level;
+        private List<Assessment> assessments = new ArrayList<>();
+
+        public Module(int id, int level) {
+            super(id);
+            this.level = level;
+        }
+
+        public int getLevel() { return level; }
+        public List<Assessment> getAssessments() { return assessments; }
+        public void addAssessment(Assessment a) { assessments.add(a); }
+
+        // Module grade calculation
+        public double getModuleScore() {
+            if (assessments.stream().anyMatch(Assessment::isIncomplete)) return 0.0;
+            double total = 0.0;
+            for (Assessment a : assessments) {
+                total += a.getGrade() * a.getWeighting() / 100.0;
+            }
+            return total;
+        }
+
+        public boolean hasAllAssessmentsCompleted() {
+            return assessments.stream().allMatch(a -> !a.isIncomplete());
+        }
+    }
+
+    /** Student class */
+    public static class Student extends IDObject {
+        private List<Module> modules = new ArrayList<>();
+
+        public Student(int id) throws SQLException {
+            super(id);
+            validateId("StudentEnrolment", "StudentID");
+            loadModulesFromDB();
+        }
 
         public List<Module> getModules() { return modules; }
 
-        public Module getModuleById(int mid) {
-            for (Module m : modules) if (m.getId() == mid) return m;
-            return null;
-        }
+        private void loadModulesFromDB() throws SQLException {
+            Map<Integer, Module> moduleMap = new HashMap<>();
+            try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + DB_PATH)) {
 
-        public List<Assessment> getAllAssessments() {
-            List<Assessment> all = new ArrayList<>();
-            for (Module m : modules) all.addAll(m.getAssessments());
-            return all;
-        }
-
-        public double calculateDegreeScore() {
-            double total = 0;
-            int count = 0;
-            for (Module m : modules) {
-                total += m.calculateModuleScore();
-                count++;
-            }
-            return count == 0 ? 0 : total / count;
-        }
-
-        // Dummy modules for demonstration
-        private void loadDummyModules() {
-            // Create 4 modules per student with random grades
-            int[] moduleIDs = {4005, 4006, 4007, 6007};
-            int[] levels = {4, 4, 4, 6};
-            for (int i = 0; i < moduleIDs.length; i++) {
-                Module m = new Module(moduleIDs[i], levels[i]);
-                // Each module has 2–4 assessments
-                int numAssessments = 2 + (int)(Math.random() * 3);
-                for (int j = 0; j < numAssessments; j++) {
-                    double max = 50 + Math.random() * 100; // Max marks 50–150
-                    double score = Math.random() * max;
-                    Assessment a = new Assessment(globalAssessmentID++, "AssessmentType", m.getId(), score, max);
-                    m.addAssessment(a);
+                // Load student's modules
+                try (PreparedStatement ps = conn.prepareStatement(
+                        "SELECT ModuleID FROM StudentEnrolment WHERE StudentID = ?")) {
+                    ps.setInt(1, id);
+                    ResultSet rs = ps.executeQuery();
+                    while (rs.next()) {
+                        int mid = rs.getInt("ModuleID");
+                        Module m = new Module(mid, getModuleLevel(conn, mid));
+                        modules.add(m);
+                        moduleMap.put(mid, m);
+                    }
                 }
-                modules.add(m);
-            }
-        }
-    }
 
-    // === MODULE CLASS ===
-    public static class Module {
-        private int id;
-        private int level;
-        private List<Assessment> assessments;
+                // Load assessments and weightings
+                try (PreparedStatement ps = conn.prepareStatement(
+                        "SELECT a.AssessmentID, a.AssessmentType, a.ModuleID, a.MaximumMarks, a.AwardedMarks, s.Weighting " +
+                                "FROM Assessment a JOIN AssessmentStructure s ON a.AssessmentID = s.AssessmentID " +
+                                "WHERE a.StudentID = ?")) {
+                    ps.setInt(1, id);
+                    ResultSet rs = ps.executeQuery();
+                    while (rs.next()) {
+                        int aid = rs.getInt("AssessmentID");
+                        String type = rs.getString("AssessmentType");
+                        int mid = rs.getInt("ModuleID");
+                        Double max = rs.getObject("MaximumMarks") != null ? rs.getDouble("MaximumMarks") : null;
+                        Double awarded = rs.getObject("AwardedMarks") != null ? rs.getDouble("AwardedMarks") : null;
+                        double weight = rs.getDouble("Weighting");
 
-        public Module(int id, int level) {
-            this.id = id;
-            this.level = level;
-            this.assessments = new ArrayList<>();
-        }
-
-        public int getId() { return id; }
-
-        public int getLevel() { return level; }
-
-        public List<Assessment> getAssessments() { return assessments; }
-
-        public void addAssessment(Assessment a) { assessments.add(a); }
-
-        public double calculateModuleScore() {
-            double totalScore = 0;
-            double totalMax = 0;
-            for (Assessment a : assessments) {
-                totalScore += a.getScore();
-                totalMax += a.getMaxScore();
-            }
-            return totalMax == 0 ? 0 : (totalScore / totalMax) * 100; // Return % score
-        }
-
-        public int countMissingAssessments() {
-            int missing = 0;
-            for (Assessment a : assessments) if (!a.attempted()) missing++;
-            return missing;
-        }
-    }
-
-    // === ASSESSMENT CLASS ===
-    public static class Assessment {
-        private int id;
-        private String type;
-        private int moduleId;
-        private double score;
-        private double maxScore;
-
-        public Assessment(int id, String type, int moduleId, double score, double maxScore) {
-            this.id = id;
-            this.type = type;
-            this.moduleId = moduleId;
-            this.score = score;
-            this.maxScore = maxScore;
-        }
-
-        public int getId() { return id; }
-        public int getModuleId() { return moduleId; }
-        public double getScore() { return score; }
-        public double getMaxScore() { return maxScore; }
-        public double getContributionToModuleScore() { return score; }
-
-        public boolean attempted() { return maxScore > 0 && score > 0; }
-    }
-
-    // === LOAD ALL STUDENTS ===
-    public static List<Student> loadAllStudents() {
-        List<Student> students = new ArrayList<>();
-        // For demonstration, generate 2 students
-        students.add(new Student(1000));
-        students.add(new Student(1001));
-        return students;
-    }
-
-    // === PRINT ASSESSMENTS ===
-    public static void printAssessments(List<Assessment> assessments, Scanner scanner) {
-        if (assessments.isEmpty()) {
-            System.out.println("No assessments to display.");
-            return;
-        }
-        System.out.println("\nAssessmentID | StudentID | ModuleID | Score | Status");
-        for (Assessment a : assessments) {
-            System.out.printf("%10d | %9d | %8d | %6.2f | %5.2f/%5.2f\n",
-                    a.getId(), 1000, a.getModuleId(), a.getContributionToModuleScore(),
-                    a.getScore(), a.getMaxScore());
-        }
-        System.out.print("Export this report to CSV? (y/n): ");
-        String choice = scanner.nextLine().trim();
-        if (choice.equalsIgnoreCase("y")) exportAssessmentsCSV(assessments);
-    }
-
-    private static void exportAssessmentsCSV(List<Assessment> assessments) {
-        try (PrintWriter pw = new PrintWriter("assessments.csv")) {
-            pw.println("AssessmentID,StudentID,ModuleID,Score,MaxScore");
-            for (Assessment a : assessments)
-                pw.printf("%d,%d,%d,%.2f,%.2f\n", a.getId(), 1000, a.getModuleId(),
-                        a.getContributionToModuleScore(), a.getMaxScore());
-            System.out.println("CSV exported to assessments.csv");
-        } catch (Exception e) { System.out.println("Error exporting CSV: " + e.getMessage()); }
-    }
-
-    // === PRINT MODULES ===
-    public static void printModules(List<Module> modules, List<Student> students, Scanner scanner) {
-        if (modules.isEmpty()) {
-            System.out.println("No modules to display.");
-            return;
-        }
-        System.out.println("\nModuleID | StudentID | Level | NumericGrade | Missing assessments");
-        for (Module m : modules) {
-            for (Student s : students) {
-                if (s.getModules().contains(m)) {
-                    System.out.printf("%8d | %9d | %5d | %12.2f | %18d\n",
-                            m.getId(), s.getId(), m.getLevel(),
-                            m.calculateModuleScore(), m.countMissingAssessments());
-                }
-            }
-        }
-        System.out.print("Export this report to CSV? (y/n): ");
-        String choice = scanner.nextLine().trim();
-        if (choice.equalsIgnoreCase("y")) exportModulesCSV(modules, students);
-    }
-
-    private static void exportModulesCSV(List<Module> modules, List<Student> students) {
-        try (PrintWriter pw = new PrintWriter("modules.csv")) {
-            pw.println("ModuleID,StudentID,Level,NumericGrade,MissingAssessments");
-            for (Module m : modules) {
-                for (Student s : students) {
-                    if (s.getModules().contains(m)) {
-                        pw.printf("%d,%d,%d,%.2f,%d\n", m.getId(), s.getId(),
-                                m.getLevel(), m.calculateModuleScore(), m.countMissingAssessments());
+                        Assessment a = new Assessment(aid, type, mid, max, awarded, weight);
+                        if (moduleMap.containsKey(mid)) moduleMap.get(mid).addAssessment(a);
                     }
                 }
             }
-            System.out.println("CSV exported to modules.csv");
-        } catch (Exception e) { System.out.println("Error exporting CSV: " + e.getMessage()); }
-    }
-
-    // === PRINT DEGREES ===
-    public static void printDegrees(List<Student> students, Scanner scanner) {
-        System.out.println("\nStudentID | DegreeScore | DegreeGrade");
-        for (Student s : students) {
-            double score = s.calculateDegreeScore();
-            String grade;
-            if (score >= 70) grade = "First";
-            else if (score >= 60) grade = "Upper Second";
-            else if (score >= 50) grade = "Lower Second";
-            else if (score >= 40) grade = "Third";
-            else grade = "Fail - You shall NOT PASS!";
-            System.out.printf("%9d | %11.2f | %s\n", s.getId(), score, grade);
         }
-        System.out.print("Export this report to CSV? (y/n): ");
-        String choice = scanner.nextLine().trim();
-        if (choice.equalsIgnoreCase("y")) exportDegreesCSV(students);
-    }
 
-    private static void exportDegreesCSV(List<Student> students) {
-        try (PrintWriter pw = new PrintWriter("degrees.csv")) {
-            pw.println("StudentID,DegreeScore,DegreeGrade");
-            for (Student s : students) {
-                double score = s.calculateDegreeScore();
-                String grade;
-                if (score >= 70) grade = "First";
-                else if (score >= 60) grade = "Upper Second";
-                else if (score >= 50) grade = "Lower Second";
-                else if (score >= 40) grade = "Third";
-                else grade = "Fail - You shall NOT PASS!";
-                pw.printf("%d,%.2f,%s\n", s.getId(), score, grade);
+        private int getModuleLevel(Connection conn, int moduleId) throws SQLException {
+            try (PreparedStatement ps = conn.prepareStatement("SELECT Level FROM Module WHERE ModuleID = ?")) {
+                ps.setInt(1, moduleId);
+                ResultSet rs = ps.executeQuery();
+                if (rs.next()) return rs.getInt("Level");
+                throw new SQLException("Module " + moduleId + " not found");
             }
-            System.out.println("CSV exported to degrees.csv");
-        } catch (Exception e) { System.out.println("Error exporting CSV: " + e.getMessage()); }
+        }
+
+        // Degree score calculation with lowest module dropped
+        public double getDegreeScore() {
+            if (modules.isEmpty()) return 0.0;
+            // List of module scores
+            List<Module> completedModules = new ArrayList<>(modules);
+            completedModules.sort(Comparator.comparingDouble(Module::getModuleScore));
+            // Drop lowest module
+            completedModules.remove(0);
+
+            double level5Avg = completedModules.stream()
+                    .filter(m -> m.getLevel() == 5)
+                    .mapToDouble(Module::getModuleScore)
+                    .average().orElse(0.0);
+
+            double level6Avg = completedModules.stream()
+                    .filter(m -> m.getLevel() == 6)
+                    .mapToDouble(Module::getModuleScore)
+                    .average().orElse(0.0);
+
+            return level5Avg * 0.3 + level6Avg * 0.7;
+        }
+
+        public String getDegreeClassification() {
+            double score = getDegreeScore();
+            if (score < 40) return "Fail";
+            else if (score < 50) return "Third class";
+            else if (score < 60) return "Second class 2nd division";
+            else if (score < 70) return "Second class 1st division";
+            else return "First class";
+        }
+
+        public double getModuleScore(int moduleId) {
+            return modules.stream()
+                    .filter(m -> m.getId() == moduleId)
+                    .mapToDouble(Module::getModuleScore)
+                    .findFirst().orElse(0.0);
+        }
     }
 }

@@ -1,175 +1,106 @@
-import java.util.*; // Scanner, List, ArrayList, Comparator
-import java.sql.*;   // Placeholder if you integrate JDBC later
-import java.io.*;    // For CSV export prompts
+import java.util.*;
+import java.sql.SQLException;
 
-// Main class is strictly UI logic
 public class Main {
+    public static void main(String[] args) {
+        Scanner scanner = new Scanner(System.in);
 
-    private static final Scanner scanner = new Scanner(System.in); // Scanner for console input
-
-    public static void main(String[] args) throws SQLException {
         while (true) {
-            // === STUDENT SELECTION MENU ===
-            System.out.println("\n=== STUDENT SELECTION ===");
+            System.out.println("=== STUDENT SELECTION ===");
             System.out.println("1) Select student by ID");
-            System.out.println("2) Select all students");
             System.out.println("0) Exit");
             System.out.print("Choice: ");
-            String choice = scanner.nextLine().trim(); // Read user input
+            int choice = scanner.nextInt();
+            if (choice == 0) break;
+            if (choice != 1) continue;
 
-            List<SGC.Student> selectedStudents = new ArrayList<>(); // List to hold selected students
+            System.out.print("Enter Student ID: ");
+            int studentId = scanner.nextInt();
 
-            if (choice.equals("0")) break; // Exit program
-            else if (choice.equals("1")) { // Select a single student
-                System.out.print("Enter Student ID: ");
-                int sid = Integer.parseInt(scanner.nextLine().trim());
-                try {
-                    selectedStudents.add(new SGC.Student(sid)); // Load student from SGC
-                } catch (IllegalArgumentException e) {
-                    System.out.println("Student not found."); // Invalid ID handling
-                    continue;
-                }
-            } else if (choice.equals("2")) { // Select all students
-                selectedStudents = SGC.loadAllStudents(); // Load all students from SGC
-                if (selectedStudents.isEmpty()) {
-                    System.out.println("No students found.");
-                    continue;
-                }
-            } else {
-                System.out.println("Invalid choice."); // Invalid menu choice
-                continue;
-            }
-
-            // === REPORT MENU LOOP ===
-            while (true) {
-                System.out.println("\n=== REPORT MENU ===");
-                System.out.println("1) Assessment Report");
-                System.out.println("2) Module Report");
-                System.out.println("3) Degree Report");
-                System.out.println("0) Back");
-                System.out.print("Choose an option: ");
-                String reportChoice = scanner.nextLine().trim();
-
-                if (reportChoice.equals("0")) break; // Go back to student selection
-
-                switch (reportChoice) {
-                    case "1":
-                        assessmentReport(selectedStudents); // Call assessment report
-                        break;
-                    case "2":
-                        moduleReport(selectedStudents); // Call module report
-                        break;
-                    case "3":
-                        if (selectedStudents.size() > 1)
-                            degreeReport(selectedStudents); // Only for multiple students
-                        else
-                            System.out.println("Degree report filtering by category only works for multiple students.");
-                        break;
-                    default:
-                        System.out.println("Invalid option."); // Invalid report menu choice
-                }
+            try {
+                SGC.Student student = new SGC.Student(studentId);
+                studentMenu(student, scanner);
+            } catch (SQLException e) {
+                System.out.println("Error loading student: " + e.getMessage());
             }
         }
 
-        System.out.println("Goodbye!"); // Exit message
+        System.out.println("Exiting program.");
     }
 
-    // === ASSESSMENT REPORT ===
-    private static void assessmentReport(List<SGC.Student> students) {
-        System.out.println("\n=== ASSESSMENT REPORT ===");
-        System.out.println("1) Select Assessment by ID");
-        System.out.println("2) Print all assessments");
-        System.out.print("Choice: ");
-        String choice = scanner.nextLine().trim();
+    private static void studentMenu(SGC.Student student, Scanner scanner) {
+        while (true) {
+            System.out.println("\n=== STUDENT MENU ===");
+            System.out.println("1) Assessment report");
+            System.out.println("2) Module report");
+            System.out.println("3) Degree report");
+            System.out.println("4) Back");
+            System.out.print("Choice: ");
+            int choice = scanner.nextInt();
 
-        if (choice.equals("1")) {
-            // User selects specific assessment ID
-            System.out.print("Enter Assessment ID: ");
-            int aid = Integer.parseInt(scanner.nextLine().trim());
-            List<SGC.Assessment> found = new ArrayList<>();
-            for (SGC.Student s : students) {
-                for (SGC.Assessment a : s.getAllAssessments()) {
-                    if (a.getId() == aid) found.add(a);
-                }
-            }
-            if (found.isEmpty()) System.out.println("Assessment not found.");
-            else SGC.printAssessments(found, scanner);
-        } else if (choice.equals("2")) {
-            // Print all assessments for selected students
-            List<SGC.Assessment> all = new ArrayList<>();
-            for (SGC.Student s : students) all.addAll(s.getAllAssessments());
-
-            if (!all.isEmpty()) {
-                // Prompt to rank by grade
-                System.out.print("Rank by grade? (y/n): ");
-                String rankChoice = scanner.nextLine().trim();
-                if (rankChoice.equalsIgnoreCase("y"))
-                    all.sort(Comparator.comparingDouble(SGC.Assessment::getContributionToModuleScore).reversed());
-            }
-
-            SGC.printAssessments(all, scanner); // Print all assessments
-        } else System.out.println("Invalid choice.");
-    }
-
-    // === MODULE REPORT ===
-    private static void moduleReport(List<SGC.Student> students) {
-        System.out.println("\n=== MODULE REPORT ===");
-        System.out.println("1) Select Module by ID");
-        System.out.println("2) Print all modules");
-        System.out.print("Choice: ");
-        String choice = scanner.nextLine().trim();
-
-        if (choice.equals("1")) {
-            System.out.print("Enter Module ID: ");
-            int mid = Integer.parseInt(scanner.nextLine().trim());
-            List<SGC.Module> found = new ArrayList<>();
-            for (SGC.Student s : students) {
-                SGC.Module m = s.getModuleById(mid);
-                if (m != null) found.add(m);
-            }
-            if (found.isEmpty()) System.out.println("Module not found.");
-            else SGC.printModules(found, students, scanner);
-        } else if (choice.equals("2")) {
-            List<SGC.Module> allModules = new ArrayList<>();
-            for (SGC.Student s : students) allModules.addAll(s.getModules());
-
-            // Prompt to rank by numeric grade
-            System.out.print("Rank by grade? (y/n): ");
-            String rankChoice = scanner.nextLine().trim();
-            if (rankChoice.equalsIgnoreCase("y"))
-                allModules.sort(Comparator.comparingDouble(SGC.Module::calculateModuleScore).reversed());
-
-            SGC.printModules(allModules, students, scanner);
-        } else System.out.println("Invalid choice.");
-    }
-
-    // === DEGREE REPORT ===
-    private static void degreeReport(List<SGC.Student> students) {
-        // Only for multiple students
-        System.out.println("\nSelect Grade Category:");
-        System.out.println("1) First");
-        System.out.println("2) Upper Second");
-        System.out.println("3) Lower Second");
-        System.out.println("4) Third");
-        System.out.println("5) Fail");
-        System.out.print("Choice: ");
-        String catChoice = scanner.nextLine().trim();
-
-        double[] thresholds = {70, 60, 50, 40}; // Grade thresholds
-        List<SGC.Student> filtered = new ArrayList<>();
-        for (SGC.Student s : students) {
-            double score = s.calculateDegreeScore();
-            switch (catChoice) {
-                case "1": if (score >= thresholds[0]) filtered.add(s); break;
-                case "2": if (score >= thresholds[1] && score < thresholds[0]) filtered.add(s); break;
-                case "3": if (score >= thresholds[2] && score < thresholds[1]) filtered.add(s); break;
-                case "4": if (score >= thresholds[3] && score < thresholds[2]) filtered.add(s); break;
-                case "5": if (score < thresholds[3]) filtered.add(s); break;
-                default: System.out.println("Invalid choice."); return;
+            switch (choice) {
+                case 1 -> assessmentReport(student, scanner);
+                case 2 -> moduleReport(student, scanner);
+                case 3 -> degreeReport(student);
+                case 4 -> { return; }
+                default -> System.out.println("Invalid choice.");
             }
         }
+    }
 
-        if (filtered.isEmpty()) System.out.println("No students in this category.");
-        else SGC.printDegrees(filtered, scanner);
+    private static void assessmentReport(SGC.Student student, Scanner scanner) {
+        System.out.print("Enter Assessment ID (0 for all): ");
+        int aid = scanner.nextInt();
+
+        System.out.printf("%-12s %-15s %-10s %-12s %-12s %-8s%n",
+                "AssessmentID", "Type", "ModuleID", "AwardedMarks", "MaxMarks", "Weight%");
+        System.out.println("----------------------------------------------------------------");
+
+        for (SGC.Module m : student.getModules()) {
+            for (SGC.Assessment a : m.getAssessments()) {
+                if (aid != 0 && a.getId() != aid) continue;
+                System.out.printf("%-12d %-15s %-10d %-12s %-12s %-8.1f%n",
+                        a.getId(),
+                        a.getType(),
+                        a.getModuleId(),
+                        a.getAwardedMarks() != null ? a.getAwardedMarks() : "N/A",
+                        a.getMaxMarks() != null ? a.getMaxMarks() : "N/A",
+                        a.getWeighting()
+                );
+            }
+        }
+    }
+
+    private static void moduleReport(SGC.Student student, Scanner scanner) {
+        System.out.print("Enter Module ID (0 for all): ");
+        int mid = scanner.nextInt();
+
+        System.out.printf("%-10s %-6s %-12s %-10s %-10s%n",
+                "ModuleID", "Level", "ModuleScore", "Completed", "TotalAssess");
+        System.out.println("-----------------------------------------------------");
+
+        for (SGC.Module m : student.getModules()) {
+            if (mid != 0 && m.getId() != mid) continue;
+
+            long completed = m.getAssessments().stream().filter(a -> !a.isIncomplete()).count();
+
+            System.out.printf("%-10d %-6d %-12.2f %-10d %-10d%n",
+                    m.getId(),
+                    m.getLevel(),
+                    m.getModuleScore(),
+                    completed,
+                    m.getAssessments().size()
+            );
+        }
+    }
+
+    private static void degreeReport(SGC.Student student) {
+        double score = student.getDegreeScore();
+        String classification = student.getDegreeClassification();
+
+        System.out.println("+----------------+----------------------+");
+        System.out.printf("| %-14s | %-20.2f |\n", "Degree Score", score);
+        System.out.printf("| %-14s | %-20s |\n", "Classification", classification);
+        System.out.println("+----------------+----------------------+");
     }
 }
