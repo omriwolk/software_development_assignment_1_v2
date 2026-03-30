@@ -1,0 +1,38 @@
+✅ What works as expected
+Single student selection
+You can enter a Student ID (e.g., 1000) and the program correctly loads that student.
+Multiple students selection
+Selecting “all students” loads multiple students (e.g., 1000 and 1001).
+Assessment report
+Selecting a specific assessment by ID shows all matching assessments for that student.
+Printing all assessments works and lists all assessments for selected students.
+Ranking by grade works when chosen (y/n), sorting assessments correctly.
+Module report
+Selecting a specific module by ID shows module info for one or more students.
+Printing all modules works and displays all modules for selected students.
+Ranking by grade works correctly.
+Degree report
+Works only for multiple students as intended.
+Selecting grade categories filters correctly, and prints degree scores and grades.
+Handles “no students in category” correctly.
+CSV export prompts
+Prompts appear correctly after each report (y/n) even if you choose n.
+UI flow
+Student selection → report menu → back → exit works without crashing.
+Invalid menu choices are correctly handled.
+⚠️ What doesn’t work as expected / edge cases
+Assessment ID not found when selecting “all students”
+Example: After selecting all students and choosing Assessment ID 1, it says Assessment not found.
+Reason: IDs for assessments are student-specific, so 1 exists for student 1000 but not in the combined list after loadAllStudents().
+This is expected behavior given how IDs are currently handled, but it might be confusing for the user.
+Degree report filtering for single student
+Works exactly as designed (you get the “only works for multiple students” message).
+Nothing wrong, just a limitation of your current logic.
+Assessment and module IDs might collide between students
+Currently, assessment IDs seem unique per student, not global.
+So if a user selects “all students” and searches by ID, it may not return any result unless you handle global unique IDs.
+Degree grade messages
+For Fail category, the message is custom (“Fail - You shall NOT PASS!”), but other categories show only the grade name.
+Works, but it’s inconsistent formatting.
+Ranking for multiple students in module/assessment
+Works, but if multiple students have the same module, it prints repeated module entries per student — this may or may not be what you expect.

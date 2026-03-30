@@ -1,0 +1,180 @@
+=== STUDENT SELECTION ===
+1) Select student by ID
+2) Select all students
+0) Exit
+Choice: 1
+Enter Student ID: 1000
+
+=== REPORT MENU ===
+1) Assessment Report
+2) Module Report
+3) Degree Report
+0) Back
+Choose an option: 1
+
+=== ASSESSMENT REPORT ===
+1) Select Assessment by ID
+2) Print all assessments
+Choice: 1
+Enter Assessment ID: 1
+
+AssessmentID | StudentID | ModuleID | Score | Status
+          1 |      1000 |     4005 |  35.56 | 32.00/90.00
+          1 |      1000 |     4006 |  35.56 | 32.00/90.00
+          1 |      1000 |     4007 |  35.56 | 32.00/90.00
+          1 |      1000 |     6007 |  35.56 | 32.00/90.00
+Export this report to CSV? (y/n): n
+
+=== REPORT MENU ===
+1) Assessment Report
+2) Module Report
+3) Degree Report
+0) Back
+Choose an option: 1
+
+=== ASSESSMENT REPORT ===
+1) Select Assessment by ID
+2) Print all assessments
+Choice: 2
+Rank by grade? (y/n): y
+
+AssessmentID | StudentID | ModuleID | Score | Status
+          1 |      1000 |     4005 |  35.56 | 32.00/90.00
+          1 |      1000 |     4006 |  35.56 | 32.00/90.00
+          1 |      1000 |     4007 |  35.56 | 32.00/90.00
+          1 |      1000 |     6007 |  35.56 | 32.00/90.00
+          2 |      1000 |     4005 |  33.33 | 25.00/75.00
+          2 |      1000 |     4006 |  33.33 | 25.00/75.00
+          2 |      1000 |     4007 |  33.33 | 25.00/75.00
+          2 |      1000 |     6007 |  33.33 | 25.00/75.00
+Export this report to CSV? (y/n): n
+
+=== REPORT MENU ===
+1) Assessment Report
+2) Module Report
+3) Degree Report
+0) Back
+Choose an option: 2
+
+=== MODULE REPORT ===
+1) Select Module by ID
+2) Print all modules
+Choice: 1
+Enter Module ID: 6007
+
+ModuleID | StudentID | Level | NumericGrade | Missing assessments
+    6007 |      1000 |     6 |        34.55 |                  0
+Export this report to CSV? (y/n): n
+
+=== REPORT MENU ===
+1) Assessment Report
+2) Module Report
+3) Degree Report
+0) Back
+Choose an option: 2
+
+=== MODULE REPORT ===
+1) Select Module by ID
+2) Print all modules
+Choice: 2
+Rank by grade? (y/n): y
+
+ModuleID | StudentID | Level | NumericGrade | Missing assessments
+    4005 |      1000 |     4 |        34.55 |                  0
+    4006 |      1000 |     4 |        34.55 |                  0
+    4007 |      1000 |     4 |        34.55 |                  0
+    6007 |      1000 |     6 |        34.55 |                  0
+Export this report to CSV? (y/n): n
+
+=== REPORT MENU ===
+1) Assessment Report
+2) Module Report
+3) Degree Report
+0) Back
+Choose an option: 3
+Degree report filtering by category only works for multiple students.
+
+=== REPORT MENU ===
+1) Assessment Report
+2) Module Report
+3) Degree Report
+0) Back
+Choose an option: 0
+
+=== STUDENT SELECTION ===
+1) Select student by ID
+2) Select all students
+0) Exit
+Choice: 2
+
+=== REPORT MENU ===
+1) Assessment Report
+2) Module Report
+3) Degree Report
+0) Back
+Choose an option: 1
+
+=== ASSESSMENT REPORT ===
+1) Select Assessment by ID
+2) Print all assessments
+Choice: 1
+Enter Assessment ID: 1
+
+AssessmentID | StudentID | ModuleID | Score | Status
+          1 |      1000 |     4005 |  35.56 | 32.00/90.00
+          1 |      1000 |     4006 |  35.56 | 32.00/90.00
+          1 |      1000 |     4007 |  35.56 | 32.00/90.00
+          1 |      1000 |     6007 |  35.56 | 32.00/90.00
+Export this report to CSV? (y/n): n
+
+=== REPORT MENU ===
+1) Assessment Report
+2) Module Report
+3) Degree Report
+0) Back
+Choose an option: 2
+
+=== MODULE REPORT ===
+1) Select Module by ID
+2) Print all modules
+Choice: 1
+Enter Module ID: 6007
+
+ModuleID | StudentID | Level | NumericGrade | Missing assessments
+    6007 |      1000 |     6 |        34.55 |                  0
+Export this report to CSV? (y/n): n
+
+=== REPORT MENU ===
+1) Assessment Report
+2) Module Report
+3) Degree Report
+0) Back
+Choose an option: 2
+
+=== MODULE REPORT ===
+1) Select Module by ID
+2) Print all modules
+Choice: 2
+Rank by grade? (y/n): n
+
+ModuleID | StudentID | Level | NumericGrade | Missing assessments
+    4005 |      1000 |     4 |        34.55 |                  0
+    4006 |      1000 |     4 |        34.55 |                  0
+    4007 |      1000 |     4 |        34.55 |                  0
+    6007 |      1000 |     6 |        34.55 |                  0
+Export this report to CSV? (y/n): n
+
+=== REPORT MENU ===
+1) Assessment Report
+2) Module Report
+3) Degree Report
+0) Back
+Choose an option: 3
+Degree report filtering by category only works for multiple students.
+
+=== REPORT MENU ===
+1) Assessment Report
+2) Module Report
+3) Degree Report
+0) Back
+Choose an option: 
