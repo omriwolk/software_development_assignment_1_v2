@@ -1,7 +1,17 @@
-import java.sql.SQLException; // Needed to handle database errors
-import java.util.*;           // Needed for List, ArrayList, Scanner, Set, etc.
+import java.sql.SQLException;     // For database exceptions
+import java.util.*;               // For List, ArrayList, Scanner, Set, Comparator
+import java.io.*;                 // For CSV export
 
 public class Main {
+
+    // --- ANSI escape codes for colors and bold ---
+    public static final String RESET = "\033[0m";
+    public static final String BOLD = "\033[1m";
+    public static final String RED = "\033[31m";
+    public static final String ORANGE = "\033[38;5;208m";  // orange
+    public static final String PURPLE = "\033[35m";
+    public static final String BLUE = "\033[34m";
+    public static final String GREEN = "\033[32m";
 
     public static void main(String[] args) {
 
@@ -9,55 +19,46 @@ public class Main {
 
         try {
 
-            // Infinite loop for program (until user exits)
+            // --- Infinite loop for student selection ---
             while (true) {
 
-                // === STUDENT SELECTION MENU ===
                 System.out.println("\n=== STUDENT SELECTION ===");
 
-                // Load all student IDs from database
+                // --- Load all student IDs from DB ---
                 List<Integer> studentIDs = SGC.loadAllStudentIDs();
-
-                // Print all available student IDs
-                System.out.println("Available student IDs:");
-                for (int id : studentIDs) {
-                    System.out.println(id); // Print each ID line by line
+                if (studentIDs.isEmpty()) {
+                    System.out.println("No students found in database!");
+                    return;
                 }
 
-                // Show input instructions
-                System.out.println("\nEnter:");
-                System.out.println("- Student ID");         // select one student
-                System.out.println("- 0 for ALL students"); // select all students
-                System.out.println("- 'exit' to quit");     // exit program
-                System.out.print("Choice: ");
+                // --- Show student ID range ---
+                int minID = Collections.min(studentIDs);
+                int maxID = Collections.max(studentIDs);
+                System.out.printf("Choose Student ID between %d and %d, 0 for ALL, -1 to exit%n", minID, maxID);
 
-                // Read user input as string
+                // --- Read input ---
                 String input = sc.nextLine().trim();
+                if (input.equals("-1")) break; // exit program
 
-                // If user types "exit" → terminate program
-                if (input.equalsIgnoreCase("exit")) break;
-
-                // List to hold selected students
                 List<SGC.Student> selectedStudents = new ArrayList<>();
 
-                // If user selects ALL students
                 if (input.equals("0")) {
-                    // Load each student from DB and add to list
-                    for (int id : studentIDs) {
-                        selectedStudents.add(SGC.loadStudent(id));
-                    }
+                    // Load all students
+                    for (int id : studentIDs) selectedStudents.add(SGC.loadStudent(id));
                 } else {
-                    // Otherwise, user entered a specific student ID
-                    int sid = Integer.parseInt(input); // convert to int
-                    selectedStudents.add(SGC.loadStudent(sid)); // load that student
+                    // Validate input
+                    int sid;
+                    try { sid = Integer.parseInt(input); }
+                    catch (NumberFormatException e) { System.out.println("Invalid ID"); continue; }
+
+                    if (!studentIDs.contains(sid)) { System.out.println("Invalid ID"); continue; }
+
+                    selectedStudents.add(SGC.loadStudent(sid));
                 }
 
-                // === REPORT MENU LOOP ===
-                boolean back = false; // flag to go back to student menu
-
+                // --- Report menu loop ---
+                boolean back = false;
                 while (!back) {
-
-                    // Print report options
                     System.out.println("\n=== REPORT MENU ===");
                     System.out.println("1) Assessment report");
                     System.out.println("2) Module report");
@@ -65,147 +66,276 @@ public class Main {
                     System.out.println("4) Back");
                     System.out.print("Choice: ");
 
-                    int choice = Integer.parseInt(sc.nextLine()); // read user choice
+                    int choice;
+                    try { choice = Integer.parseInt(sc.nextLine()); }
+                    catch (NumberFormatException e) { System.out.println("Invalid choice"); continue; }
 
                     switch (choice) {
 
                         // =========================
-                        // 1) ASSESSMENT REPORT
+                        // 1) Assessment report
                         // =========================
                         case 1 -> {
 
-                            System.out.println("\nAvailable Assessment IDs:");
-
-                            // Use Set to avoid duplicate IDs
-                            Set<Integer> ids = new HashSet<>();
-
-                            // Collect all assessment IDs from selected students
+                            // --- Gather all assessments ---
+                            List<SGC.Assessment> allAssessments = new ArrayList<>();
                             for (SGC.Student s : selectedStudents) {
                                 for (SGC.Module m : s.getModules()) {
-                                    for (SGC.Assessment a : m.getAssessments()) {
-                                        ids.add(a.getAssessmentID());
-                                    }
+                                    allAssessments.addAll(m.getAssessments());
                                 }
                             }
-
-                            // Print all unique assessment IDs
-                            for (int id : ids) {
-                                System.out.println(id);
+                            if (allAssessments.isEmpty()) {
+                                System.out.println("No assessments found.");
+                                break;
                             }
 
-                            // Ask user to select assessment
-                            System.out.print("Enter Assessment ID or 0 for ALL: ");
-                            int aid = Integer.parseInt(sc.nextLine());
+                            // --- Determine assessment ID range ---
+                            int minAid = allAssessments.stream().mapToInt(SGC.Assessment::getAssessmentID).min().orElse(0);
+                            int maxAid = allAssessments.stream().mapToInt(SGC.Assessment::getAssessmentID).max().orElse(0);
+                            System.out.printf("Enter Assessment ID between %d and %d, 0 for ALL, -1 for back: ", minAid, maxAid);
 
-                            // Print table header
-                            System.out.println("\nID | Student | Module | Type | Awarded/Max | Weight");
+                            int aid;
+                            try { aid = Integer.parseInt(sc.nextLine()); }
+                            catch (NumberFormatException e) { System.out.println("Invalid ID"); break; }
+                            if (aid == -1) break;
 
-                            // Loop through all selected students
+                            // --- Filter selected assessments ---
+                            List<String[]> rows = new ArrayList<>();
                             for (SGC.Student s : selectedStudents) {
                                 for (SGC.Module m : s.getModules()) {
                                     for (SGC.Assessment a : m.getAssessments()) {
-
-                                        // Show either all or specific assessment
                                         if (aid == 0 || a.getAssessmentID() == aid) {
-
-                                            // Print formatted row
-                                            System.out.printf("%d | %d | %d | %s | %.1f/%s | %.1f%%\n",
-                                                    a.getAssessmentID(), // assessment ID
-                                                    s.getStudentID(),    // student ID
-                                                    a.getModuleID(),     // module ID
-                                                    a.getType(),         // type (Exam, etc.)
-                                                    a.getAwardedMarks() != null ? a.getAwardedMarks() : 0.0, // awarded marks
-                                                    a.getMaxMarks() != null ? a.getMaxMarks() : "-",         // max marks or "-"
-                                                    a.getWeight());      // weight %
+                                            rows.add(new String[]{
+                                                    String.valueOf(a.getAssessmentID()),
+                                                    String.valueOf(s.getStudentID()),
+                                                    String.valueOf(a.getModuleID()),
+                                                    a.getType(),
+                                                    String.format("%.1f", a.getAwardedMarks() != null ? a.getAwardedMarks() : 0.0),
+                                                    (a.getMaxMarks() != null ? String.format("%.1f", a.getMaxMarks()) : "-"),
+                                                    String.format("%.1f", a.getWeight())
+                                            });
                                         }
                                     }
                                 }
                             }
+                            if (rows.isEmpty()) { System.out.println("No data found."); break; }
+
+                            // --- Determine logical sorting options dynamically ---
+                            List<String> sortOptions = new ArrayList<>();
+                            if (selectedStudents.size() > 1) sortOptions.add("StudentID");
+                            Set<Integer> moduleSet = new HashSet<>();
+                            for (String[] r : rows) moduleSet.add(Integer.parseInt(r[2]));
+                            if (moduleSet.size() > 1) sortOptions.add("ModuleID");
+                            if (rows.size() > 1) sortOptions.addAll(Arrays.asList("AssessmentID", "Grade"));
+
+                            // --- Sorting prompt ---
+                            if (!sortOptions.isEmpty()) {
+                                System.out.println("Sort by options:");
+                                for (int i = 0; i < sortOptions.size(); i++)
+                                    System.out.printf("%d) %s%n", i+1, sortOptions.get(i));
+                                System.out.print("Choose sorting option: ");
+                                String sortInput = sc.nextLine().trim();
+                                int sIdx;
+                                try { sIdx = Integer.parseInt(sortInput) - 1; } catch (Exception e) { sIdx = -1; }
+                                if (sIdx >= 0 && sIdx < sortOptions.size()) {
+                                    System.out.print("Ascending (A) or Descending (D)? ");
+                                    String ascDesc = sc.nextLine().trim().toUpperCase();
+                                    boolean ascending = !ascDesc.equals("D");
+
+                                    String option = sortOptions.get(sIdx);
+                                    switch (option) {
+                                        case "StudentID" -> rows.sort(Comparator.comparing(r -> Integer.parseInt(r[1])));
+                                        case "ModuleID" -> rows.sort(Comparator.comparing(r -> Integer.parseInt(r[2])));
+                                        case "AssessmentID" -> rows.sort(Comparator.comparing(r -> Integer.parseInt(r[0])));
+                                        case "Grade" -> rows.sort(Comparator.comparing(r -> Double.parseDouble(r[4])));
+                                    }
+                                    if (!ascending) Collections.reverse(rows);
+                                }
+                            }
+
+                            // --- Print table ---
+                            System.out.println("\nID | Student | Module | Type | Awarded/Max | Weight");
+                            for (String[] r : rows) {
+                                System.out.printf("%s | %s | %s | %s | %s/%s | %s%%\n",
+                                        r[0], r[1], r[2], r[3], r[4], r[5], r[6]);
+                            }
+
+                            // --- CSV export prompt ---
+                            System.out.print("Export to CSV? (Y/N): ");
+                            String exp = sc.nextLine().trim().toUpperCase();
+                            if (exp.equals("Y")) {
+                                try (PrintWriter pw = new PrintWriter(new File("assessment_report.csv"))) {
+                                    pw.println("ID,Student,Module,Type,Awarded,Max,Weight");
+                                    for (String[] r : rows) pw.println(String.join(",", r));
+                                    System.out.println("CSV exported as assessment_report.csv");
+                                } catch (Exception e) { System.out.println("Error exporting CSV: " + e.getMessage()); }
+                            }
                         }
 
                         // =========================
-                        // 2) MODULE REPORT
+                        // 2) Module report
                         // =========================
                         case 2 -> {
 
-                            System.out.println("\nAvailable Module IDs:");
-
-                            // Use Set to avoid duplicates
-                            Set<Integer> moduleIDs = new HashSet<>();
-
-                            // Collect all module IDs
+                            // --- Gather all module IDs ---
+                            Set<Integer> moduleIDsSet = new HashSet<>();
                             for (SGC.Student s : selectedStudents) {
                                 for (SGC.Module m : s.getModules()) {
-                                    moduleIDs.add(m.getModuleID());
+                                    moduleIDsSet.add(m.getModuleID());
                                 }
                             }
+                            if (moduleIDsSet.isEmpty()) { System.out.println("No modules found."); break; }
 
-                            // Print module IDs
-                            for (int id : moduleIDs) {
-                                System.out.println(id);
-                            }
+                            // --- Show module ID range ---
+                            int minMid = Collections.min(moduleIDsSet);
+                            int maxMid = Collections.max(moduleIDsSet);
+                            System.out.printf("Enter Module ID between %d and %d, 0 for ALL, -1 for back: ", minMid, maxMid);
 
-                            // Ask user for module selection
-                            System.out.print("Enter Module ID or 0 for ALL: ");
-                            int mid = Integer.parseInt(sc.nextLine());
+                            int mid;
+                            try { mid = Integer.parseInt(sc.nextLine()); }
+                            catch (NumberFormatException e) { System.out.println("Invalid input"); break; }
+                            if (mid == -1) break;
 
-                            // Print header
-                            System.out.println("\nModule | Student | Level | Grade");
-
-                            // Loop through students and modules
+                            // --- Filter modules by selected ID ---
+                            List<String[]> rows = new ArrayList<>();
                             for (SGC.Student s : selectedStudents) {
                                 for (SGC.Module m : s.getModules()) {
-
-                                    // Filter condition
                                     if (mid == 0 || m.getModuleID() == mid) {
-
-                                        // Print module row
-                                        System.out.printf("%d | %d | %d | %.2f\n",
-                                                m.getModuleID(),   // module ID
-                                                s.getStudentID(),  // student ID
-                                                m.getLevel(),      // module level
-                                                m.getModuleScore() // calculated grade
-                                        );
+                                        rows.add(new String[]{
+                                                String.valueOf(m.getModuleID()),
+                                                String.valueOf(s.getStudentID()),
+                                                String.valueOf(m.getLevel()),
+                                                String.format("%.2f", m.getModuleScore())
+                                        });
                                     }
                                 }
                             }
-                        }
+                            if (rows.isEmpty()) { System.out.println("No data found."); break; }
 
-                        // =========================
-                        // 3) DEGREE REPORT
-                        // =========================
-                        case 3 -> {
+                            // --- Determine logical sorting options dynamically ---
+                            Set<Integer> uniqueModules = new HashSet<>();
+                            Set<Integer> uniqueStudents = new HashSet<>();
+                            for (String[] r : rows) { uniqueModules.add(Integer.parseInt(r[0])); uniqueStudents.add(Integer.parseInt(r[1])); }
+                            List<String> sortOptions = new ArrayList<>();
+                            if (uniqueModules.size() > 1) sortOptions.add("ModuleID");
+                            if (uniqueStudents.size() > 1) sortOptions.add("StudentID");
+                            if (rows.size() > 1) sortOptions.add("ModuleScore");
 
-                            // Print header
-                            System.out.println("\nStudent | Degree | Classification");
+                            // --- Sorting prompt ---
+                            if (!sortOptions.isEmpty()) {
+                                System.out.println("Sort by options:");
+                                for (int i = 0; i < sortOptions.size(); i++)
+                                    System.out.printf("%d) %s%n", i+1, sortOptions.get(i));
+                                System.out.print("Choose sorting option: ");
+                                String sortInput = sc.nextLine().trim();
+                                int sIdx;
+                                try { sIdx = Integer.parseInt(sortInput) - 1; } catch (Exception e) { sIdx = -1; }
+                                if (sIdx >= 0 && sIdx < sortOptions.size()) {
+                                    System.out.print("Ascending (A) or Descending (D)? ");
+                                    String ascDesc = sc.nextLine().trim().toUpperCase();
+                                    boolean ascending = !ascDesc.equals("D");
 
-                            // Loop through selected students
-                            for (SGC.Student s : selectedStudents) {
+                                    String option = sortOptions.get(sIdx);
+                                    switch (option) {
+                                        case "ModuleID" -> rows.sort(Comparator.comparing(r -> Integer.parseInt(r[0])));
+                                        case "StudentID" -> rows.sort(Comparator.comparing(r -> Integer.parseInt(r[1])));
+                                        case "ModuleScore" -> rows.sort(Comparator.comparing(r -> Double.parseDouble(r[3])));
+                                    }
+                                    if (!ascending) Collections.reverse(rows);
+                                }
+                            }
 
-                                // Print degree score and classification
-                                System.out.printf("%d | %.2f | %s\n",
-                                        s.getStudentID(),      // student ID
-                                        s.getDegreeScore(),    // degree score
-                                        s.getDegreeClass());   // classification
+                            // --- Print table ---
+                            System.out.println("\nModule | Student | Level | Grade");
+                            for (String[] r : rows) {
+                                System.out.printf("%s | %s | %s | %s\n", r[0], r[1], r[2], r[3]);
+                            }
+
+                            // --- CSV export ---
+                            System.out.print("Export to CSV? (Y/N): ");
+                            String exp = sc.nextLine().trim().toUpperCase();
+                            if (exp.equals("Y")) {
+                                try (PrintWriter pw = new PrintWriter(new File("module_report.csv"))) {
+                                    pw.println("Module,Student,Level,Grade");
+                                    for (String[] r : rows) pw.println(String.join(",", r));
+                                    System.out.println("CSV exported as module_report.csv");
+                                } catch (Exception e) { System.out.println("Error exporting CSV: " + e.getMessage()); }
                             }
                         }
 
                         // =========================
-                        // 4) BACK
+                        // 3) Degree report
                         // =========================
-                        case 4 -> back = true; // exit report menu
+                        case 3 -> {
+                            List<String[]> rows = new ArrayList<>();
+                            for (SGC.Student s : selectedStudents) {
+                                double score = s.getDegreeScore();
+                                String classification = s.getDegreeClass();
+                                rows.add(new String[]{
+                                        String.valueOf(s.getStudentID()),
+                                        String.format("%.2f", score),
+                                        classification
+                                });
+                            }
+                            if (rows.isEmpty()) { System.out.println("No students found."); break; }
 
-                        // Handle invalid input
+                            // --- Sorting prompt if multiple students ---
+                            if (rows.size() > 1) {
+                                System.out.println("Sort by: 1=StudentID, 2=DegreeScore");
+                                String sortChoice = sc.nextLine().trim();
+                                System.out.print("Ascending (A) or Descending (D)? ");
+                                String ascDesc = sc.nextLine().trim().toUpperCase();
+                                boolean ascending = !ascDesc.equals("D");
+
+                                switch (sortChoice) {
+                                    case "1" -> rows.sort(Comparator.comparing(r -> Integer.parseInt(r[0])));
+                                    case "2" -> rows.sort(Comparator.comparing(r -> Double.parseDouble(r[1])));
+                                }
+                                if (!ascending) Collections.reverse(rows);
+                            }
+
+                            // --- Print table with bold + colors ---
+                            System.out.println("\nStudent | Degree | Classification");
+                            for (String[] r : rows) {
+                                String cls = r[2];
+                                String color = RESET;
+
+                                if (cls.startsWith("Fail")) color = RED;
+                                else if (cls.startsWith("Third")) color = ORANGE;
+                                else if (cls.startsWith("Second class 2nd")) color = PURPLE;
+                                else if (cls.startsWith("Second class 1st")) color = BLUE;
+                                else if (cls.startsWith("First")) color = GREEN;
+
+                                System.out.printf("%s | %s | %s%s%s%s\n",
+                                        r[0], r[1], BOLD, color, cls, RESET);
+                            }
+
+                            // --- CSV export ---
+                            System.out.print("Export to CSV? (Y/N): ");
+                            String exp = sc.nextLine().trim().toUpperCase();
+                            if (exp.equals("Y")) {
+                                try (PrintWriter pw = new PrintWriter(new File("degree_report.csv"))) {
+                                    pw.println("Student,Degree,Classification");
+                                    for (String[] r : rows) pw.println(String.join(",", r));
+                                    System.out.println("CSV exported as degree_report.csv");
+                                } catch (Exception e) { System.out.println("Error exporting CSV: " + e.getMessage()); }
+                            }
+                        }
+
+                        // =========================
+                        // 4) Back
+                        // =========================
+                        case 4 -> back = true;
+
                         default -> System.out.println("Invalid choice");
                     }
                 }
             }
 
         } catch (SQLException e) {
-            // Catch any database-related errors
             System.out.println("DB Error: " + e.getMessage());
         }
 
-        sc.close(); // Close scanner when program ends
+        sc.close(); // Close scanner at the end
     }
 }

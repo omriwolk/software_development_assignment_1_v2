@@ -1,17 +1,17 @@
 import java.sql.*;
 import java.util.*;
 
-// Class representing the SGC system
+// SGC: Staffordshire Grading Computation
 public class SGC {
 
-    // Inner class for Assessment
+    // --- Assessment class ---
     public static class Assessment {
-        private int assessmentID;       // Unique ID for assessment
-        private String type;            // Type (Exam, Report, Presentation)
-        private int moduleID;           // Module ID this assessment belongs to
+        private int assessmentID;       // Unique assessment ID
+        private String type;            // Assessment type (Exam, Report, etc.)
+        private int moduleID;           // Module it belongs to
         private Double maxMarks;        // Maximum marks (nullable)
-        private Double awardedMarks;    // Marks awarded (nullable)
-        private double weight;          // Weight from AssessmentStructure
+        private Double awardedMarks;    // Awarded marks (nullable)
+        private double weight;          // Weighting from AssessmentStructure table
 
         // Constructor
         public Assessment(int assessmentID, String type, int moduleID,
@@ -24,7 +24,7 @@ public class SGC {
             this.weight = weight;
         }
 
-        // Getters
+        // --- Getters ---
         public int getAssessmentID() { return assessmentID; }
         public String getType() { return type; }
         public int getModuleID() { return moduleID; }
@@ -32,30 +32,27 @@ public class SGC {
         public Double getAwardedMarks() { return awardedMarks; }
         public double getWeight() { return weight; }
 
-        // Compute contribution to module score
+        // Calculate contribution of this assessment to module
         public double getContribution() {
-            if (awardedMarks == null) return 0.0;
+            if (awardedMarks == null) return 0.0; // Missing marks = 0
             double grade;
             if ("Exam".equalsIgnoreCase(type)) {
                 grade = awardedMarks / maxMarks * 100; // Exam: percentage
             } else {
-                grade = awardedMarks;                  // Other: direct mark
+                grade = awardedMarks; // Other assessments: direct mark
             }
-            return grade * (weight / 100.0);          // Weighted contribution
+            return grade * (weight / 100.0); // Weighted contribution
         }
 
-        // Return grade for display
+        // Get grade for display
         public double getGrade() {
             if (awardedMarks == null) return 0.0;
-            if ("Exam".equalsIgnoreCase(type)) {
-                return awardedMarks / maxMarks * 100;
-            } else {
-                return awardedMarks;
-            }
+            if ("Exam".equalsIgnoreCase(type)) return awardedMarks / maxMarks * 100;
+            else return awardedMarks;
         }
     }
 
-    // Class representing Module
+    // --- Module class ---
     public static class Module {
         private int moduleID;                // Module ID
         private int level;                   // Level (4,5,6)
@@ -68,15 +65,15 @@ public class SGC {
             this.assessments = new ArrayList<>();
         }
 
-        // Getters
+        // --- Getters ---
         public int getModuleID() { return moduleID; }
         public int getLevel() { return level; }
         public List<Assessment> getAssessments() { return assessments; }
 
-        // Compute module score
+        // Compute total module score (weighted)
         public double getModuleScore() {
             for (Assessment a : assessments) {
-                if (a.getAwardedMarks() == null) return 0.0; // Any missing -> 0
+                if (a.getAwardedMarks() == null) return 0.0; // missing assessment -> 0
             }
             double total = 0.0;
             for (Assessment a : assessments) total += a.getContribution();
@@ -85,17 +82,20 @@ public class SGC {
 
         // Check if all assessments completed
         public boolean hasAllAssessmentsCompleted() {
-            for (Assessment a : assessments) {
-                if (a.getAwardedMarks() == null) return false;
-            }
+            for (Assessment a : assessments) if (a.getAwardedMarks() == null) return false;
             return true;
+        }
+
+        // Check if module is failed for Level 5/6
+        public boolean isFailedLevel5or6() {
+            return (level == 5 || level == 6) && getModuleScore() < 40.0;
         }
     }
 
-    // Class representing Student
+    // --- Student class ---
     public static class Student {
-        private int studentID;                // Student ID
-        private List<Module> modules;         // List of modules
+        private int studentID;          // Student ID
+        private List<Module> modules;   // List of modules
 
         // Constructor
         public Student(int studentID) {
@@ -103,51 +103,49 @@ public class SGC {
             this.modules = new ArrayList<>();
         }
 
-        // Getters
+        // --- Getters ---
         public int getStudentID() { return studentID; }
         public List<Module> getModules() { return modules; }
 
-        // Get specific module by ID
+        // Retrieve module by ID
         public Module getModuleByID(int moduleID) {
             for (Module m : modules) if (m.getModuleID() == moduleID) return m;
             return null;
         }
 
-        // Compute degree grade
+        // Compute overall degree score
         public double getDegreeScore() {
+
+            // --- Step 0: Immediate fail if any Level 5/6 module failed ---
+            for (Module m : modules) if (m.isFailedLevel5or6()) return 0.0;
+
             List<Module> mods = new ArrayList<>(modules);
 
-            // Step 1: remove lowest module
+            // --- Step 1: remove lowest module score ---
             mods.sort(Comparator.comparingDouble(Module::getModuleScore));
             if (!mods.isEmpty()) mods.remove(0);
 
-            double level5Sum = 0.0;
-            int level5Count = 0;
+            // --- Step 2: split by level ---
+            double level5Sum = 0.0; int level5Count = 0;
+            double level6Sum = 0.0; int level6Count = 0;
 
-            double level6Sum = 0.0;
-            int level6Count = 0;
-
-            // Step 2: split by level
             for (Module m : mods) {
-                if (m.getLevel() == 5) {
-                    level5Sum += m.getModuleScore();
-                    level5Count++;
-                } else if (m.getLevel() == 6) {
-                    level6Sum += m.getModuleScore();
-                    level6Count++;
-                }
+                if (m.getLevel() == 5) { level5Sum += m.getModuleScore(); level5Count++; }
+                else if (m.getLevel() == 6) { level6Sum += m.getModuleScore(); level6Count++; }
             }
 
-            // Step 3: averages
+            // --- Step 3: averages ---
             double level5Avg = (level5Count == 0) ? 0 : level5Sum / level5Count;
             double level6Avg = (level6Count == 0) ? 0 : level6Sum / level6Count;
 
-            // Step 4: weighted final score
+            // --- Step 4: weighted final score ---
             return (level5Avg * 0.3) + (level6Avg * 0.7);
         }
-        // Get degree classification
+
+        // Determine degree classification
         public String getDegreeClass() {
             double score = getDegreeScore();
+            if (score == 0.0) return "Fail - You shall NOT PASS!"; // Level5/6 fail
             if (score < 40) return "Fail - You shall NOT PASS!";
             if (score < 50) return "Third class";
             if (score < 60) return "Second class 2nd division";
@@ -156,7 +154,7 @@ public class SGC {
         }
     }
 
-    // Database path (absolute)
+    // --- Database path ---
     private static final String DB_PATH = "/home/omri/software_development/assignment-1/university.db";
 
     // Load all student IDs
@@ -170,19 +168,22 @@ public class SGC {
         return ids;
     }
 
-    // Load student by ID
+    // Load a student with all modules and assessments
     public static Student loadStudent(int studentID) throws SQLException {
         Student student = new Student(studentID);
 
         try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + DB_PATH)) {
-            // Load modules for student
+
+            // --- Load enrolled modules ---
             PreparedStatement psModules = conn.prepareStatement(
                     "SELECT DISTINCT ModuleID FROM StudentEnrolment WHERE StudentID = ?");
             psModules.setInt(1, studentID);
             ResultSet rsModules = psModules.executeQuery();
+
             while (rsModules.next()) {
                 int moduleID = rsModules.getInt("ModuleID");
-                // Load module level
+
+                // --- Load module level ---
                 PreparedStatement psLevel = conn.prepareStatement(
                         "SELECT Level FROM Module WHERE ModuleID = ?");
                 psLevel.setInt(1, moduleID);
@@ -190,34 +191,40 @@ public class SGC {
                 int level = rsLevel.next() ? rsLevel.getInt("Level") : 0;
                 Module module = new Module(moduleID, level);
 
-                // Load assessments for this module & student
+                // --- Load assessments ---
                 PreparedStatement psAssess = conn.prepareStatement(
                         "SELECT AssessmentID, AssessmentType, MaximumMarks, AwardedMarks " +
                                 "FROM Assessment WHERE StudentID = ? AND ModuleID = ?");
                 psAssess.setInt(1, studentID);
                 psAssess.setInt(2, moduleID);
                 ResultSet rsAssess = psAssess.executeQuery();
+
                 while (rsAssess.next()) {
                     int assessmentID = rsAssess.getInt("AssessmentID");
                     String type = rsAssess.getString("AssessmentType");
-                    Double maxMarks = rsAssess.getObject("MaximumMarks") != null ? rsAssess.getDouble("MaximumMarks") : null;
-                    Double awardedMarks = rsAssess.getObject("AwardedMarks") != null ? rsAssess.getDouble("AwardedMarks") : null;
+                    Double maxMarks = rsAssess.getObject("MaximumMarks") != null
+                            ? rsAssess.getDouble("MaximumMarks") : null;
+                    Double awardedMarks = rsAssess.getObject("AwardedMarks") != null
+                            ? rsAssess.getDouble("AwardedMarks") : null;
 
-                    // Load weight from AssessmentStructure
+                    // --- Load weighting ---
                     PreparedStatement psWeight = conn.prepareStatement(
                             "SELECT Weighting FROM AssessmentStructure WHERE AssessmentID = ?");
                     psWeight.setInt(1, assessmentID);
                     ResultSet rsWeight = psWeight.executeQuery();
                     double weight = rsWeight.next() ? rsWeight.getDouble("Weighting") : 0.0;
 
+                    // --- Create assessment object ---
                     Assessment assessment = new Assessment(assessmentID, type, moduleID, maxMarks, awardedMarks, weight);
                     module.getAssessments().add(assessment);
+
                     rsWeight.close();
                 }
+
                 student.getModules().add(module);
             }
         }
+
         return student;
     }
-
 }
