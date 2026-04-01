@@ -7,7 +7,7 @@ import java.util.*;      // For Lists, Comparators, etc.
 public class SGC {
 
     // =========================
-    // Abstract base class: Assessment
+    // Abstract base class: Assessment - Cannot be initiated
     // =========================
     public static abstract class Assessment {
         protected int assessmentID;      // Unique ID for assessment
@@ -26,19 +26,34 @@ public class SGC {
         }
 
         // =========================
-        // Abstract methods for polymorphism
+        // Abstract methods - No body, implementations are in subclasses
         // =========================
         public abstract double getGrade();        // Return raw grade
+
         public abstract double getContribution(); // Weighted contribution to module
 
         // =========================
         // Getters
         // =========================
-        public int getAssessmentID() { return assessmentID; }
-        public String getType() { return type; }
-        public int getModuleID() { return moduleID; }
-        public Double getAwardedMarks() { return awardedMarks; }
-        public double getWeight() { return weight; }
+        public int getAssessmentID() {
+            return assessmentID;
+        }
+
+        public String getType() {
+            return type;
+        }
+
+        public int getModuleID() {
+            return moduleID;
+        }
+
+        public Double getAwardedMarks() {
+            return awardedMarks;
+        }
+
+        public double getWeight() {
+            return weight;
+        }
     }
 
     // =========================
@@ -54,18 +69,24 @@ public class SGC {
         }
 
         // Getter for maxMarks
-        public Double getMaxMarks() { return maxMarks; }
+        public Double getMaxMarks() {
+            return maxMarks;
+        }
 
         // Compute grade as percentage
         @Override
         public double getGrade() {
-            if (awardedMarks == null || maxMarks == null) return 0.0;
+            if (awardedMarks == null) {
+                return 0.0;
+            }
+
             return (awardedMarks / maxMarks) * 100.0;
         }
 
         // Compute weighted contribution
         @Override
         public double getContribution() {
+
             return getGrade() * (weight / 100.0);
         }
     }
@@ -112,21 +133,15 @@ public class SGC {
         // Compute module score (sum of weighted contributions)
         // =========================
         public double getModuleScore() {
+            double total = 0.0;
             // If any assessment is missing marks, module score = 0
             for (Assessment a : assessments) {
-                if (a.getAwardedMarks() == null) return 0.0;
+                if (a.getAwardedMarks() == null) {
+                    return 0.0; // Early exit if any mark is missing
+                }
+                total += a.getContribution();
             }
-            double total = 0.0;
-            for (Assessment a : assessments) total += a.getContribution(); // Polymorphic call
             return total;
-        }
-
-        // Check if all assessments have marks
-        public boolean hasAllAssessmentsCompleted() {
-            for (Assessment a : assessments) {
-                if (a.getAwardedMarks() == null) return false;
-            }
-            return true;
         }
 
         // =========================
@@ -134,7 +149,9 @@ public class SGC {
         // =========================
         public Assessment getAssessmentByID(int id) {
             for (Assessment a : assessments) {
-                if (a.getAssessmentID() == id) return a;
+                if (a.getAssessmentID() == id) {
+                    return a;
+                }
             }
             return null; // Not found
         }
@@ -142,9 +159,17 @@ public class SGC {
         // =========================
         // Getters
         // =========================
-        public int getModuleID() { return moduleID; }
-        public int getLevel() { return level; }
-        public List<Assessment> getAssessments() { return assessments; }
+        public int getModuleID() {
+            return moduleID;
+        }
+
+        public int getLevel() {
+            return level;
+        }
+
+        public List<Assessment> getAssessments() {
+            return assessments;
+        }
     }
 
     // =========================
@@ -155,7 +180,9 @@ public class SGC {
         private List<Module> modules = new ArrayList<>(); // Modules enrolled
 
         // Constructor
-        public Student(int studentID) { this.studentID = studentID; }
+        public Student(int studentID) {
+            this.studentID = studentID;
+        }
 
         // =========================
         // Helper: get module by ID
@@ -173,27 +200,28 @@ public class SGC {
         public double getDegreeScore() {
             List<Module> mods = new ArrayList<>(modules); // Copy modules
 
-            // =====================
             // Remove lowest graded module (any level)
-            // =====================
             if (!mods.isEmpty()) {
                 mods.sort(Comparator.comparingDouble(Module::getModuleScore)); // Ascending
                 mods.remove(0); // Remove lowest
             }
 
-            // =====================
             // Compute weighted averages for level 5 and 6
-            // =====================
             double level5Sum = 0.0, level6Sum = 0.0;
             int level5Count = 0, level6Count = 0;
 
             for (Module m : mods) {
-                if (m.getLevel() == 5) { level5Sum += m.getModuleScore(); level5Count++; }
-                else if (m.getLevel() == 6) { level6Sum += m.getModuleScore(); level6Count++; }
+                if (m.getLevel() == 5) {
+                    level5Sum += m.getModuleScore();
+                    level5Count++;
+                } else if (m.getLevel() == 6) {
+                    level6Sum += m.getModuleScore();
+                    level6Count++;
+                }
             }
 
-            double level5Avg = (level5Count == 0) ? 0 : level5Sum / level5Count;
-            double level6Avg = (level6Count == 0) ? 0 : level6Sum / level6Count;
+            double level5Avg = level5Sum / level5Count;
+            double level6Avg = level6Sum / level6Count;
 
             return (level5Avg * 0.3) + (level6Avg * 0.7);
         }
@@ -213,8 +241,13 @@ public class SGC {
         // =========================
         // Getters
         // =========================
-        public int getStudentID() { return studentID; }
-        public List<Module> getModules() { return modules; }
+        public int getStudentID() {
+            return studentID;
+        }
+
+        public List<Module> getModules() {
+            return modules;
+        }
     }
 
     // =========================
@@ -229,80 +262,126 @@ public class SGC {
         List<Integer> ids = new ArrayList<>();
         try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + DB_PATH)) {
             Statement stmt = conn.createStatement();
-            ResultSet rs = stmt.executeQuery("SELECT DISTINCT StudentID FROM StudentEnrolment ORDER BY StudentID");
-            while (rs.next()) ids.add(rs.getInt("StudentID"));
+
+            // Select all unique student IDs from enrolment table, ordered ascending
+            ResultSet rs = stmt.executeQuery(
+                    "SELECT DISTINCT StudentID FROM StudentEnrolment ORDER BY StudentID"
+            );
+
+            while (rs.next()) {
+                ids.add(rs.getInt("StudentID"));
+            }
         }
         return ids;
     }
 
     // =========================
-    // Load a student by ID
+    // Load a student by ID (optimized SQL with JOINs)
     // =========================
     public static Student loadStudent(int studentID) throws SQLException {
+        // Create a new Student object with the given ID
         Student student = new Student(studentID);
 
+        // Try-with-resources ensures the DB connection is automatically closed
         try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + DB_PATH)) {
 
             // =====================
-            // Load all modules for student
+            // Single JOIN query to get modules, assessments, max marks, awarded marks, weight
             // =====================
-            PreparedStatement psModules = conn.prepareStatement(
-                    "SELECT DISTINCT ModuleID FROM StudentEnrolment WHERE StudentID=?");
-            psModules.setInt(1, studentID);
-            ResultSet rsModules = psModules.executeQuery();
+        /*
+        SQL Explanation:
+        - StudentEnrolment (e) JOIN Module (m) to get each module's level
+        - LEFT JOIN Assessment (a) to get assessment info for this student and module
+          (LEFT JOIN ensures we still get modules even if there are no assessments)
+        - LEFT JOIN AssessmentStructure (s) to get weighting for each assessment
+        - Filter by StudentID
+        - ORDER BY ModuleID, AssessmentID to keep consistent ordering
+        */
+            String sql = """
+            SELECT m.ModuleID, m.Level,
+                   a.AssessmentID, a.AssessmentType, a.MaximumMarks, a.AwardedMarks,
+                   s.Weighting
+            FROM StudentEnrolment e
+            JOIN Module m ON e.ModuleID = m.ModuleID
+            LEFT JOIN Assessment a ON e.StudentID = a.StudentID AND e.ModuleID = a.ModuleID
+            LEFT JOIN AssessmentStructure s ON a.AssessmentID = s.AssessmentID
+            WHERE e.StudentID = ?
+            ORDER BY m.ModuleID, a.AssessmentID
+        """;
 
-            while (rsModules.next()) {
-                int moduleID = rsModules.getInt("ModuleID");
+            // Prepare the SQL statement for execution (prevents SQL injection)
+            PreparedStatement ps = conn.prepareStatement(sql);
 
-                // Get module level
-                PreparedStatement psLevel = conn.prepareStatement(
-                        "SELECT Level FROM Module WHERE ModuleID=?");
-                psLevel.setInt(1, moduleID);
-                ResultSet rsLevel = psLevel.executeQuery();
-                int level = rsLevel.next() ? rsLevel.getInt("Level") : 0;
+            // Bind the studentID parameter into the query
+            ps.setInt(1, studentID);
 
-                Module module = new Module(moduleID, level);
+            // Execute the query and obtain the result set
+            ResultSet rs = ps.executeQuery();
+
+            // Keep track of the current module while iterating through results
+            Module currentModule = null;
+            int lastModuleID = -1; // Initialize with invalid ID to detect first module
+
+            // Iterate over each row in the result set
+            while (rs.next()) {
+                // Read the ModuleID from the current row
+                int moduleID = rs.getInt("ModuleID");
 
                 // =====================
-                // Load assessments for module
+                // Detect when a new module starts
                 // =====================
-                PreparedStatement psAssess = conn.prepareStatement(
-                        "SELECT AssessmentID, AssessmentType, MaximumMarks, AwardedMarks " +
-                                "FROM Assessment WHERE StudentID=? AND ModuleID=?");
-                psAssess.setInt(1, studentID);
-                psAssess.setInt(2, moduleID);
-                ResultSet rsAssess = psAssess.executeQuery();
+                if (moduleID != lastModuleID) { // Module changed
+                    // Read the module level
+                    int level = rs.getInt("Level");
 
-                while (rsAssess.next()) {
-                    int aid = rsAssess.getInt("AssessmentID");
-                    String type = rsAssess.getString("AssessmentType");
-                    Double maxMarks = rsAssess.getObject("MaximumMarks") != null ? rsAssess.getDouble("MaximumMarks") : null;
-                    Double awardedMarks = rsAssess.getObject("AwardedMarks") != null ? rsAssess.getDouble("AwardedMarks") : null;
+                    // Create a new Module object with the current moduleID and level
+                    currentModule = new Module(moduleID, level);
 
-                    // Load weight
-                    PreparedStatement psWeight = conn.prepareStatement(
-                            "SELECT Weighting FROM AssessmentStructure WHERE AssessmentID=?");
-                    psWeight.setInt(1, aid);
-                    ResultSet rsWeight = psWeight.executeQuery();
-                    double weight = rsWeight.next() ? rsWeight.getDouble("Weighting") : 0.0;
+                    // Add the new Module to the student's module list
+                    student.getModules().add(currentModule);
 
-                    Assessment assessment;
-
-                    // Instantiate Exam or Coursework
-                    if ("Exam".equalsIgnoreCase(type)) {
-                        assessment = new Exam(aid, moduleID, maxMarks, awardedMarks, weight);
-                    } else {
-                        assessment = new Coursework(aid, type, moduleID, awardedMarks, weight);
-                    }
-
-                    module.getAssessments().add(assessment);
-                    rsWeight.close();
+                    // Update lastModuleID for next iteration
+                    lastModuleID = moduleID;
                 }
 
-                student.getModules().add(module);
-            }
-        }
+                // =====================
+                // Read assessment data
+                // =====================
+                int aid = rs.getInt("AssessmentID"); // AssessmentID
+                if (rs.wasNull()) continue; // Skip row if no assessment exists for this module
 
+                // Get assessment type: "Exam", "Report", "Presentation", etc.
+                String type = rs.getString("AssessmentType");
+
+                // Get maximum marks (nullable for non-Exam assessments)
+                Double maxMarks = rs.getObject("MaximumMarks") != null ? rs.getDouble("MaximumMarks") : null;
+
+                // Get awarded marks (nullable if not graded yet)
+                Double awardedMarks = rs.getObject("AwardedMarks") != null ? rs.getDouble("AwardedMarks") : null;
+
+                // Get assessment weighting (default to 0.0 if missing)
+                double weight = rs.getObject("Weighting") != null ? rs.getDouble("Weighting") : 0.0;
+
+                // =====================
+                // Instantiate the correct Assessment subclass
+                // =====================
+                Assessment assessment;
+
+                // If type is "Exam", use Exam class (with maxMarks)
+                if ("Exam".equalsIgnoreCase(type)) {
+                    assessment = new Exam(aid, moduleID, maxMarks, awardedMarks, weight);
+                }
+                // Otherwise, use Coursework (Report, Presentation, etc.)
+                else {
+                    assessment = new Coursework(aid, type, moduleID, awardedMarks, weight);
+                }
+
+                // Add the assessment to the current module's assessment list
+                currentModule.getAssessments().add(assessment);
+            } // End of result set iteration
+        } // Connection is automatically closed here
+
+        // Return the fully loaded Student object with modules and assessments
         return student;
     }
 }
