@@ -1,9 +1,11 @@
-import java.sql.SQLException;   // For handling database errors
-import java.util.*;             // For Scanner, List, Set, HashSet
+import java.sql.SQLException;   // Allows handling database errors
+import java.util.*;             // Imports Scanner, List, Collections, etc.
 
-public class Main {
+public class Main {             // Entry point of the program
 
-    // ANSI escape codes for colors
+    // =========================
+    // ANSI COLORS FOR OUTPUT
+    // =========================
     private static final String RED = "\u001B[31m";
     private static final String ORANGE = "\u001B[38;5;208m";
     private static final String PURPLE = "\u001B[35m";
@@ -14,201 +16,229 @@ public class Main {
 
     public static void main(String[] args) {
 
-        Scanner sc = new Scanner(System.in); // Scanner for user input
+        Scanner sc = new Scanner(System.in);
 
         try {
-            while (true) { // Main loop for selecting students
 
-                // Load all student IDs from DB
-                List<Integer> allStudentIDs = SGC.loadAllStudentIDs();
-                if (allStudentIDs.isEmpty()) {
-                    System.out.println("No students found in the database.");
+            while (true) {
+
+                List<Integer> ids = SGC.loadAllStudentIDs();
+
+                if (ids.isEmpty()) {
+                    System.out.println("No students found.");
                     break;
                 }
 
-                // Show student range in prompt
-                int minID = Collections.min(allStudentIDs);
-                int maxID = Collections.max(allStudentIDs);
-                System.out.printf("\nEnter Student ID (0 to exit, range: %d-%d): ", minID, maxID);
+                int min = Collections.min(ids);
+                int max = Collections.max(ids);
 
-                String sInput = sc.nextLine().trim();
-                if (sInput.equals("0")) break; // exit
+                System.out.printf("\nEnter Student ID (0 to exit, range: %d-%d): ", min, max);
+
+                String input = sc.nextLine().trim();
+
+                if (input.equals("0")) break;
+
                 int studentID;
+
                 try {
-                    studentID = Integer.parseInt(sInput);
-                } catch (NumberFormatException e) {
+                    studentID = Integer.parseInt(input);
+                } catch (Exception e) {
                     System.out.println("Invalid input.");
                     continue;
                 }
-                if (!allStudentIDs.contains(studentID)) {
+
+                if (!ids.contains(studentID)) {
                     System.out.println("Student ID not found.");
                     continue;
                 }
 
-                // Load selected student
                 SGC.Student student = SGC.loadStudent(studentID);
 
-                // Report menu loop
-                boolean back = false;
-                while (!back) {
+                while (true) {
 
-                    // Show menu
                     System.out.println("\n1) Assessment  2) Module  3) Degree");
                     System.out.print("Choice (0 to go back): ");
-                    String menuInput = sc.nextLine().trim();
+
                     int choice;
+
                     try {
-                        choice = Integer.parseInt(menuInput);
-                    } catch (NumberFormatException e) {
+                        choice = Integer.parseInt(sc.nextLine());
+                    } catch (Exception e) {
                         System.out.println("Invalid input.");
                         continue;
                     }
 
-                    if (choice == 0) break; // go back to student selection
+                    if (choice == 0) break;
 
                     // =========================
-                    // 1) ASSESSMENT REPORT
+                    // OPTION 1: ASSESSMENT VIEW
                     // =========================
                     if (choice == 1) {
 
-                        // Collect all assessments
-                        List<SGC.Assessment> allAssessments = new ArrayList<>();
-                        for (SGC.Module m : student.getModules()) allAssessments.addAll(m.getAssessments());
-                        if (allAssessments.isEmpty()) {
-                            System.out.println("No assessments found for this student.");
+                        List<SGC.Assessment> all = new ArrayList<>();
+
+                        for (SGC.Module m : student.getModules())
+                            all.addAll(m.getAssessments());
+
+                        if (all.isEmpty()) {
+                            System.out.println("No assessments found.");
                             continue;
                         }
 
-                        // Show assessment ID range
-                        int minAid = allAssessments.stream().mapToInt(SGC.Assessment::getAssessmentID).min().orElse(0);
-                        int maxAid = allAssessments.stream().mapToInt(SGC.Assessment::getAssessmentID).max().orElse(0);
-                        System.out.printf("Enter Assessment ID (0 to go back, range: %d-%d): ", minAid, maxAid);
-                        int aID;
+                        int minA = all.stream()
+                                .mapToInt(SGC.Assessment::getAssessmentID)
+                                .min().orElse(0);
+
+                        int maxA = all.stream()
+                                .mapToInt(SGC.Assessment::getAssessmentID)
+                                .max().orElse(0);
+
+                        System.out.printf("Enter Assessment ID (0 to go back, range: %d-%d): ", minA, maxA);
+
+                        int id;
+
                         try {
-                            aID = Integer.parseInt(sc.nextLine());
-                        } catch (NumberFormatException e) {
+                            id = Integer.parseInt(sc.nextLine());
+                        } catch (Exception e) {
                             System.out.println("Invalid input.");
                             continue;
                         }
-                        if (aID == 0) continue; // back
 
-                        // Find selected assessment
+                        if (id == 0) continue;
+
                         SGC.Assessment selected = null;
+
                         for (SGC.Module m : student.getModules()) {
-                            selected = m.getAssessmentByID(aID);
+                            selected = m.getAssessmentByID(id);
                             if (selected != null) break;
                         }
+
                         if (selected == null) {
                             System.out.println("Assessment not found.");
                             continue;
                         }
 
-                        // Print header
+                        String maxMarks = "-";
+
+                        if (selected instanceof SGC.Exam e)
+                            maxMarks = String.format("%.1f", e.getMaxMarks());
+
                         System.out.printf("\n%-10s %-12s %-12s %-14s %-12s %-8s\n",
-                                "Student", "Assessment", "Type", "Awarded Mark", "Max Mark", "Weight");
+                                "Student", "Assessment", "Type", "Awarded", "Max", "Weight");
 
-                        // Get max marks if exam
-                        String maxMarksStr = "-";
-                        if (selected instanceof SGC.Exam) {
-                            maxMarksStr = String.format("%.1f", ((SGC.Exam) selected).getMaxMarks());
-                        }
-
-                        // Print assessment row
                         System.out.printf("%-10d %-12d %-12s %-14.1f %-12s %-8.1f\n",
                                 student.getStudentID(),
                                 selected.getAssessmentID(),
                                 selected.getType(),
-                                selected.getAwardedMarks() != null ? selected.getAwardedMarks() : 0.0,
-                                maxMarksStr,
+                                selected.getAwardedMarks() != null
+                                        ? selected.getAwardedMarks() : 0.0,
+                                maxMarks,
                                 selected.getWeight()
                         );
                     }
 
                     // =========================
-                    // 2) MODULE REPORT
+                    // OPTION 2: MODULE VIEW (UPDATED ✅)
                     // =========================
                     else if (choice == 2) {
 
-                        // Show module ranges by level
-                        Map<Integer, List<Integer>> levelMap = new TreeMap<>();
-                        for (SGC.Module m : student.getModules()) {
-                            levelMap.computeIfAbsent(m.getLevel(), k -> new ArrayList<>()).add(m.getModuleID());
-                        }
-                        for (var e : levelMap.entrySet()) {
-                            int minMod = Collections.min(e.getValue());
-                            int maxMod = Collections.max(e.getValue());
-                            System.out.printf("Level %d: %d-%d\n", e.getKey(), minMod, maxMod);
+                        // Group modules by level (sorted automatically)
+                        Map<Integer, List<SGC.Module>> byLevel = new TreeMap<>();
+
+                        for (SGC.Module mod : student.getModules()) {
+                            byLevel.computeIfAbsent(mod.getLevel(), k -> new ArrayList<>()).add(mod);
                         }
 
-                        // Prompt for module ID
-                        System.out.print("Enter Module ID (0 to go back): ");
-                        int modID;
+                        // Show ALL ranges FIRST (above prompt)
+                        System.out.println("\nAvailable Modules:");
+
+                        for (Map.Entry<Integer, List<SGC.Module>> entry : byLevel.entrySet()) {
+
+                            int level = entry.getKey();
+                            List<SGC.Module> mods = entry.getValue();
+
+                            int minM = mods.stream()
+                                    .mapToInt(SGC.Module::getModuleID)
+                                    .min().orElse(0);
+
+                            int maxM = mods.stream()
+                                    .mapToInt(SGC.Module::getModuleID)
+                                    .max().orElse(0);
+
+                            System.out.printf("Level %d: %d - %d\n", level, minM, maxM);
+                        }
+
+                        // Clean prompt AFTER ranges
+                        System.out.print("\nEnter Module ID (0 to go back): ");
+
+                        int id;
+
                         try {
-                            modID = Integer.parseInt(sc.nextLine());
-                        } catch (NumberFormatException e) {
+                            id = Integer.parseInt(sc.nextLine());
+                        } catch (Exception e) {
                             System.out.println("Invalid input.");
                             continue;
                         }
-                        if (modID == 0) continue; // back
 
-                        // Find module
-                        SGC.Module module = student.getModuleByID(modID);
-                        if (module == null) {
+                        if (id == 0) continue;
+
+                        SGC.Module m = student.getModuleByID(id);
+
+                        if (m == null) {
                             System.out.println("Module not found.");
                             continue;
                         }
 
-                        // Print module report table header
                         System.out.printf("\n%-10s %-10s %-7s %-10s\n",
                                 "Student", "Module", "Level", "Grade");
+
                         System.out.printf("%-10d %-10d %-7d %-10.2f\n",
                                 student.getStudentID(),
-                                module.getModuleID(),
-                                module.getLevel(),
-                                module.getModuleScore()
+                                m.getModuleID(),
+                                m.getLevel(),
+                                m.getModuleScore()
                         );
                     }
 
                     // =========================
-                    // 3) DEGREE REPORT
+                    // OPTION 3: DEGREE VIEW
                     // =========================
                     else if (choice == 3) {
 
-                        // Compute score and classification
                         double score = student.getDegreeScore();
-                        String classification = student.getDegreeClass();
-                        String color = RESET;
 
-                        // Determine color
-                        if (score < 40) color = RED;
-                        else if (score < 50) color = ORANGE;
-                        else if (score < 60) color = PURPLE;
-                        else if (score < 70) color = BLUE;
-                        else color = GREEN;
+                        SGC.DegreeClass dc = student.getDegreeClass();
 
-                        // Print degree report header
-                        System.out.printf("\n%-10s %-12s %-30s\n", "Student", "Score", "Classification");
-                        // Print degree row
+                        String color = switch (dc) {
+                            case FAIL -> RED;
+                            case THIRD -> ORANGE;
+                            case LOWER_SECOND -> PURPLE;
+                            case UPPER_SECOND -> BLUE;
+                            case FIRST -> GREEN;
+                        };
+
+                        System.out.printf("\n%-10s %-12s %-30s\n",
+                                "Student", "Score", "Classification");
+
                         System.out.printf("%-10d %-12.2f %s%s%s\n",
                                 student.getStudentID(),
                                 score,
                                 BOLD,
-                                color + classification + RESET,
+                                color + dc.getDescription() + RESET,
                                 RESET
                         );
                     }
 
-                    // Invalid option
                     else {
                         System.out.println("Invalid choice.");
                     }
                 }
             }
+
         } catch (SQLException e) {
-            // Handle DB errors
             System.out.println("Database error: " + e.getMessage());
         }
 
-        sc.close(); // Close scanner
+        sc.close();
     }
 }
